@@ -5,10 +5,10 @@ import pandas as pd
 import streamlit as st
 ROOT=Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
-from v14.market_snapshot import load_weekly
-from v15.us_snapshot import load_us_prices,load_us_open
-from v20.public_rules import V20Config
-from v20.integrated import run_cn_v20,run_us_v20,run_advisory_cn,run_advisory_us
+from history.v14.market_snapshot import load_weekly
+from history.v15.us_snapshot import load_us_prices,load_us_open
+from history.v20.public_rules import V20Config
+from history.v20.integrated import run_cn_v20,run_us_v20,run_advisory_cn,run_advisory_us
 
 st.set_page_config(page_title='V20 公开量化策略融合审计',layout='wide')
 st.title('V20｜Faber趋势 × Antonacci双动量 × 动量质量 · 中美独立验证')

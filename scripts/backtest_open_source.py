@@ -6,9 +6,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import pandas as pd
 from live.backtest import run_bt_reference
-from v14.market_snapshot import load_weekly
-from v15.us_snapshot import load_us_prices, load_us_open
-from v18.integrated import build_cn_v18_weekly, build_us_v18
+from strategy_core.market_snapshot import load_weekly
+from strategy_core.us_snapshot import load_us_prices, load_us_open
+from strategy_core.portfolio import build_cn_v18_weekly, build_us_v18
 
 
 def main():

@@ -7,9 +7,9 @@ from dataclasses import replace
 import json
 import numpy as np
 import pandas as pd
-from v14.market_snapshot import load_weekly
-from v15.us_snapshot import load_us_prices,load_us_open
-from v19.ensemble import V19Config, build_cn_v19,build_us_v19
+from history.v14.market_snapshot import load_weekly
+from history.v15.us_snapshot import load_us_prices,load_us_open
+from history.v19.ensemble import V19Config, build_cn_v19,build_us_v19
 
 OUT=ROOT/'research_outputs';OUT.mkdir(exist_ok=True)
 p=pd.read_csv(ROOT/'market_data/verified_5asset_weekly_v13.csv',parse_dates=['week_start']).set_index('week_start')

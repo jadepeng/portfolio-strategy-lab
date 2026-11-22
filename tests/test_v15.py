@@ -3,9 +3,9 @@ import numpy as np
 import pandas as pd
 import pytest
 from history.strategies.fusion_v10 import TARGETS
-from v15.us_snapshot import load_us_prices,load_us_open
-from v15.us_strategy import USConfig,us_factors,us_signals,simulate_us
-from v15.cross_market import CrossConfig,observed_us_by_cn_week,us_to_cn_overlay
+from history.v15.us_snapshot import load_us_prices,load_us_open
+from history.v15.us_strategy import USConfig,us_factors,us_signals,simulate_us
+from history.v15.cross_market import CrossConfig,observed_us_by_cn_week,us_to_cn_overlay
 
 @pytest.fixture(scope='module')
 def us():return load_us_prices()

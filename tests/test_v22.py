@@ -5,7 +5,7 @@ from datetime import timedelta
 import numpy as np
 import pandas as pd
 import pytest
-from v22.intraday import (StopConfig,IntradayStopEngine,stop_line,normalize_bars,
+from history.v22.intraday import (StopConfig,IntradayStopEngine,stop_line,normalize_bars,
                           make_daily_lines,simulate_asset)
 
 
@@ -141,7 +141,7 @@ def test_bad_config_or_missing_history_rejected():
     with pytest.raises(ValueError):StopConfig(confirm_bars=4,second_stage_bars=4).validate()
     with pytest.raises(ValueError):stop_line(pd.Series([1.,1.]),StopConfig())
 
-from v22.allocation import allocate_stop_cuts,clip_weekly_risk_additions
+from history.v22.allocation import allocate_stop_cuts,clip_weekly_risk_additions
 
 def test_allocation_preserves_cash_and_other_assets():
     e=engine(core_floor=.2);e.session_start('2026-11-18',100,105,.01)
@@ -182,8 +182,8 @@ def test_unsettled_cn_equity_etf_inventory_cannot_be_sold_at_unsupported_fill():
     assert execution and execution.target_weight==pytest.approx(.32)
 
 def test_official_china_close_is_used_for_next_day_line_not_phantom_1500_execution():
-    from v13.daily_ohlc_2026 import load
-    from v22.intraday import make_daily_lines
+    from history.v13.daily_ohlc_2026 import load
+    from history.v22.intraday import make_daily_lines
     cn=load()
     x=pd.read_csv(ROOT/'market_data'/'v22_verified_30m_event_samples.csv')
     r=x[x.symbol=='515180.SH'].copy()

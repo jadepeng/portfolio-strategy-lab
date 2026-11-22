@@ -129,5 +129,5 @@ try:
 except Exception as e:
     st.error(f'当前无法重新下载或计算：{e}')
     st.info('你可以上传创业板及中证红利的两份Date,Close CSV。下方是此前核验的静态历史结果，不随滑块变化。')
-    snap=ROOT/'verified_rotation_results.json'
+    snap=ROOT/'history/verification/verified_rotation_results.json'
     if snap.exists():st.json(json.loads(snap.read_text(encoding='utf-8')))

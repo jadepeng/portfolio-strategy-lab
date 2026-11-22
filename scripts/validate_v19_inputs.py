@@ -5,9 +5,9 @@ ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
 import pandas as pd
 import numpy as np
 from history.strategies.fusion_v10 import PRICES
-from v14.market_snapshot import load_weekly
-from v15.us_snapshot import load_us_prices,load_us_open
-from v15.cross_market import observed_us_by_cn_week
+from history.v14.market_snapshot import load_weekly
+from history.v15.us_snapshot import load_us_prices,load_us_open
+from history.v15.cross_market import observed_us_by_cn_week
 
 cn=pd.read_csv(ROOT/'market_data/verified_5asset_weekly_v13.csv',parse_dates=['week_start']).set_index('week_start')
 us=load_us_prices();uo=load_us_open();volume=load_weekly()

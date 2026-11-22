@@ -8,9 +8,9 @@ import pandas as pd
 import pytest
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-from v21.analytics import (verify_market_history,describe,equity_curve,yearly,
+from strategy_core.analytics import (verify_market_history,describe,equity_curve,yearly,
    latest_weights,frozen_signal_record,execution_gate)
-from v15.us_snapshot import load_us_prices
+from strategy_core.us_snapshot import load_us_prices
 
 
 def test_us_snapshot_313_weeks_and_cutoff():

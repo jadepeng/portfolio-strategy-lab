@@ -35,7 +35,7 @@ for y in [.005,.01,.015,.02]:
    p=V7Config(red_core=.2,cash_mode='assumed_yield',assumed_cash_annual=y)
    r=simulate_v7(prices,base,V6Config(),p)
    result['sensitivity'][str(y)+'_fixed_cash_yield']=metrics(r)
-file=ROOT/'verified_fusion_v7_results.json'
+file=ROOT/'history/verification/verified_fusion_v7_results.json'
 file.write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
 for k in result['results']:
  print(k, 'all', result['results'][k]['all']['累计收益%'],'mdd',result['results'][k]['all']['最大回撤%'],

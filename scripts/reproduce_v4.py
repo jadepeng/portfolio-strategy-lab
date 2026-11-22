@@ -33,7 +33,7 @@ report={'source':'Longbridge history weekly close, price-only index; verified at
         'limitations':['中证红利为价格指数，不含股息','周末收盘成交为理想化执行','2023年后是回顾性时段，并非真正样本外','模型为独立公开概念量化代理，非趋势动物官方温度'],
         'settings':base.__dict__,'snap':get_stage_snapshot(res['V4趋势温度+纪律']),
         'windows':{name:{k:{key:(None if pd.isna(v) else float(v) if isinstance(v,(float,int)) and not isinstance(v,bool) else v) for key,v in metrics(df_bt,start,end).items()} for k,df_bt in res.items()} for name,(start,end) in windows.items()}}
-out=root/'verified_trend_animal_v4_results.json'
+out=root/'history/verification/verified_trend_animal_v4_results.json'
 out.write_text(json.dumps(report,ensure_ascii=False,indent=2,allow_nan=False),encoding='utf-8')
 print(f'Wrote {out} from {len(df)} verified weekly observations')
 for name in ['科技持有','红利持有','50/50再平衡','V3多因子防御','V4趋势温度+纪律']:

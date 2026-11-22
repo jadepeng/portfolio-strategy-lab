@@ -3,8 +3,8 @@ import runpy,sys
 import pandas as pd
 root=Path(__file__).resolve().parents[1];sys.path.insert(0,str(root))
 a=runpy.run_path(str(root/'scripts/reproduce_v16.py'))
-from v16.overnight import DailyGateConfig
-from v16.daily_replay import annual_stats,run_daily_replay
+from history.v16.overnight import DailyGateConfig
+from history.v16.daily_replay import annual_stats,run_daily_replay
 c=a['config'];daily=a['cn_daily'];ev=a['events'];p=a['prices'];weekly=a['cn_us'];h=a['simulate_v10'](p,weekly,c);prev=h.loc[h.index<daily.index[0]].iloc[-1];priorw=prev[['held_tech','held_red','held_bond','held_gold','held_money']].to_numpy(float);prevprice=p.loc[prev.name,list(a['PRICES'])].to_numpy(float)
 rows=[]
 for window in [3,4,5,7,10,13]:

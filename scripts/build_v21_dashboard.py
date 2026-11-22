@@ -11,12 +11,12 @@ from pathlib import Path
 import sys
 import pandas as pd
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
-from v14.market_snapshot import load_weekly
-from v15.us_snapshot import load_us_prices,load_us_open
-from v18.integrated import build_cn_v18_weekly,build_us_v18,V18USConfig
-from v20.integrated import run_advisory_cn,run_advisory_us,run_cn_v20,run_us_v20
-from v20.public_rules import V20Config
-from v21.analytics import (verify_market_history,describe,equity_curve,yearly,
+from strategy_core.market_snapshot import load_weekly
+from strategy_core.us_snapshot import load_us_prices,load_us_open
+from strategy_core.portfolio import build_cn_v18_weekly,build_us_v18,V18USConfig
+from strategy_core.advisory import run_advisory_cn,run_advisory_us,run_cn_v20,run_us_v20
+from strategy_core.public_rules import V20Config
+from strategy_core.analytics import (verify_market_history,describe,equity_curve,yearly,
                            latest_weights,execution_gate,frozen_signal_record,sha256_file)
 
 ASOF='2026-11-20'

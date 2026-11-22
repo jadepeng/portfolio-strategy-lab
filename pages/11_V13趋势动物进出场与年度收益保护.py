@@ -10,8 +10,8 @@ from history.strategies.fusion_v6 import v6_base,V6Config
 from history.strategies.fusion_v7 import V7Config
 from history.strategies.fusion_v10 import V10Config,simulate_v10,results,TARGETS
 from history.strategies.fusion_v11 import V11Config,signals_v11
-from v13.regime_v13 import RegimeConfig,signals_v13
-from v13.daily_state_v13 import DailyExitConfig,simulate
+from history.v13.regime_v13 import RegimeConfig,signals_v13
+from history.v13.daily_state_v13 import DailyExitConfig,simulate
 
 st.set_page_config(page_title='V13 趋势进出场与收益保护',layout='wide')
 st.title('V13｜趋势动物式进出场 × 组合年度收益保护')

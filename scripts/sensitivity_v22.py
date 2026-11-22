@@ -5,8 +5,8 @@ from dataclasses import replace
 import sys
 import pandas as pd
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
-from v13.daily_ohlc_2026 import load as load_cn
-from v22.intraday import StopConfig,simulate_asset
+from history.v13.daily_ohlc_2026 import load as load_cn
+from history.v22.intraday import StopConfig,simulate_asset
 
 raw=pd.read_csv(ROOT/'market_data'/'v22_verified_30m_event_samples.csv')
 ctx=load_cn();qqq=pd.read_csv(ROOT/'market_data'/'v22_qqq_daily_close_context.csv',parse_dates=['date']).set_index('date')['close']

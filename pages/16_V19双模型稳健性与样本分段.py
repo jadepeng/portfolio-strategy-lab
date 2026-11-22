@@ -5,9 +5,9 @@ import pandas as pd
 import streamlit as st
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
-from v14.market_snapshot import load_weekly
-from v15.us_snapshot import load_us_prices,load_us_open
-from v19.ensemble import V19Config,build_cn_v19,build_us_v19
+from history.v14.market_snapshot import load_weekly
+from history.v15.us_snapshot import load_us_prices,load_us_open
+from history.v19.ensemble import V19Config,build_cn_v19,build_us_v19
 
 st.set_page_config(page_title='V19 双模型稳健性',layout='wide')
 st.title('V19｜中美双模型稳健性、分段与执行成本')

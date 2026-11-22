@@ -5,9 +5,9 @@ import numpy as np
 import pandas as pd
 import pytest
 from history.strategies.fusion_v10 import TARGETS
-from v14.market_snapshot import load_weekly
-from v15.us_snapshot import load_us_prices,load_us_open
-from v19.ensemble import V19Config,build_cn_v19,build_us_v19,_blend
+from history.v14.market_snapshot import load_weekly
+from history.v15.us_snapshot import load_us_prices,load_us_open
+from history.v19.ensemble import V19Config,build_cn_v19,build_us_v19,_blend
 
 @lru_cache(maxsize=1)
 def data():

@@ -9,13 +9,13 @@ import streamlit as st
 ROOT=Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
 from history.strategies.fusion_v10 import TARGETS,PRICES,results
-from v14.market_snapshot import load_weekly
-from v15.us_snapshot import load_us_prices,load_us_open
-from v15.us_strategy import USConfig,us_signals,simulate_us
-from v13.daily_ohlc_2026 import load as load_cn_daily
-from v16.overnight import DailyGateConfig,load_event_snapshot
-from v17.cn_v17 import CNV17Config,build_cn_v17_weekly,run_cn_daily_replay_v17
-from v18.integrated import V18CNConfig,V18USConfig,build_cn_v18_weekly,build_us_v18
+from history.v14.market_snapshot import load_weekly
+from history.v15.us_snapshot import load_us_prices,load_us_open
+from history.v15.us_strategy import USConfig,us_signals,simulate_us
+from history.v13.daily_ohlc_2026 import load as load_cn_daily
+from history.v16.overnight import DailyGateConfig,load_event_snapshot
+from history.v17.cn_v17 import CNV17Config,build_cn_v17_weekly,run_cn_daily_replay_v17
+from history.v18.integrated import V18CNConfig,V18USConfig,build_cn_v18_weekly,build_us_v18
 
 st.set_page_config(page_title='V18 中美双策略与Gemini融合审计',layout='wide')
 st.title('V18｜Gemini融合、A股五资产与美股多周期趋势')
