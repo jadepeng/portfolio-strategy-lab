@@ -1,0 +1,499 @@
+/* Personal Trading Management System (PTMS) styles */
+.ptms-shell {
+  display: grid;
+  gap: 18px;
+}
+
+.ptms-account-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 16px;
+  box-shadow: var(--shadow);
+}
+
+.ptms-account-tabs {
+  display: flex;
+  gap: 6px;
+  background: #f2f6f8;
+  padding: 4px;
+  border-radius: 10px;
+}
+
+.ptms-account-tab {
+  border: 0;
+  background: transparent;
+  padding: 7px 14px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6f8092;
+  transition: .15s;
+}
+
+.ptms-account-tab.active {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 2px 6px rgba(22, 37, 58, .08);
+  font-weight: 750;
+}
+
+.ptms-account-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.ptms-account-meta strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.ptms-verdict {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 18px 22px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.ptms-verdict.verdict-stop {
+  background: #fff5f5;
+  border-color: #f3c8cb;
+}
+
+.ptms-verdict.verdict-priority {
+  background: #fff9ef;
+  border-color: #f3dfb8;
+}
+
+.ptms-verdict.verdict-rebalance {
+  background: #effaf6;
+  border-color: #c4ebd9;
+}
+
+.ptms-verdict.verdict-hold {
+  background: #f7f9fc;
+  border-color: #e3eaf2;
+}
+
+.ptms-verdict.verdict-init {
+  background: #f6f8ff;
+  border-color: #d7e1fa;
+}
+
+.ptms-verdict-main {
+  display: grid;
+  gap: 5px;
+  max-width: 820px;
+}
+
+.ptms-verdict-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ptms-verdict-title strong {
+  font-size: 18px;
+  color: var(--ink);
+}
+
+.ptms-verdict-main p {
+  margin: 0;
+  font-size: 12px;
+  color: #55677a;
+}
+
+.ptms-verdict-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 11px;
+  color: #708295;
+}
+
+.ptms-actions-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.ptms-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 750;
+  background: #eef3f7;
+  color: #4b5e73;
+}
+
+.ptms-badge.green {
+  background: #e6f7f1;
+  color: #0e8769;
+}
+
+.ptms-badge.amber {
+  background: #fff1db;
+  color: #a66a17;
+}
+
+.ptms-badge.red {
+  background: #ffe9eb;
+  color: #bf444d;
+}
+
+.ptms-badge.blue {
+  background: #eaf0ff;
+  color: #3e60cb;
+}
+
+.ptms-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 17px;
+}
+
+.ptms-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.ptms-stop-card {
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  padding: 16px;
+  background: #fbfcfe;
+  display: grid;
+  gap: 10px;
+}
+
+.ptms-stop-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 10px;
+}
+
+.ptms-stop-head strong {
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.ptms-stop-head small {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.ptms-stop-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ptms-stop-stat {
+  background: #fff;
+  border: 1px solid #edf1f6;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.ptms-stop-stat span {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.ptms-stop-stat b {
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.ptms-bar-pair {
+  display: grid;
+  gap: 5px;
+}
+
+.ptms-track {
+  height: 7px;
+  background: #edf1f6;
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+
+.ptms-track-fill {
+  height: 100%;
+  border-radius: 999px;
+}
+
+.ptms-temp-strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.ptms-temp-cell {
+  text-align: center;
+  font-size: 10px;
+  padding: 5px 2px;
+  border-radius: 6px;
+  background: #f2f5f9;
+  color: #8a97a6;
+  font-weight: 600;
+}
+
+.ptms-temp-cell.active {
+  color: #fff;
+  font-weight: 800;
+  box-shadow: 0 2px 8px rgba(22, 37, 58, .15);
+}
+
+.ptms-temp-0.active { background: #46658f; }
+.ptms-temp-1.active { background: #5a7fb0; }
+.ptms-temp-2.active { background: #7aa3b8; }
+.ptms-temp-3.active { background: #8c9aa8; }
+.ptms-temp-4.active { background: #e1a84e; }
+.ptms-temp-5.active { background: #e37b4b; }
+.ptms-temp-6.active { background: #cf4e57; }
+
+.ptms-kv-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ptms-kv-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid #f0f3f7;
+  font-size: 12px;
+}
+
+.ptms-kv-row:last-child {
+  border-bottom: 0;
+}
+
+.ptms-kv-row span {
+  color: #6b7c8e;
+}
+
+.ptms-kv-row strong {
+  color: var(--ink);
+}
+
+.ptms-ticket-card {
+  border: 1px solid #e6ecf2;
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: #fcfdff;
+  display: grid;
+  gap: 10px;
+}
+
+.ptms-ticket-card.urgent {
+  border-color: #f0bcc0;
+  background: #fff7f8;
+}
+
+.ptms-ticket-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ptms-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ptms-field {
+  display: grid;
+  gap: 5px;
+}
+
+.ptms-field.full {
+  grid-column: 1 / -1;
+}
+
+.ptms-field label {
+  font-size: 11px;
+  color: #647689;
+  font-weight: 600;
+}
+
+.ptms-field input,
+.ptms-field select,
+.ptms-field textarea {
+  width: 100%;
+  border: 1px solid #dce4ed;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+}
+
+.ptms-field textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.ptms-alert {
+  padding: 10px 13px;
+  border-radius: 9px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.ptms-alert.warn {
+  background: #fff6e8;
+  border: 1px solid #f2dbb2;
+  color: #8c5c19;
+}
+
+.ptms-alert.error {
+  background: #fff0f1;
+  border: 1px solid #f0c2c6;
+  color: #b53d45;
+}
+
+.ptms-alert.ok {
+  background: #eaf8f3;
+  border: 1px solid #c3ebdc;
+  color: #0e7c5f;
+}
+
+.ptms-modal-host {
+  position: fixed;
+  inset: 0;
+  background: rgba(14, 25, 41, .52);
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  z-index: 60;
+}
+
+.ptms-modal-host[hidden] {
+  display: none;
+}
+
+.ptms-modal {
+  width: min(740px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 60px rgba(10, 20, 35, .25);
+  padding: 22px;
+  display: grid;
+  gap: 16px;
+}
+
+.ptms-modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid #eef2f6;
+  padding-bottom: 12px;
+}
+
+.ptms-modal-head h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.ptms-modal-close {
+  border: 1px solid #e1e8f0;
+  background: #fff;
+  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  font-size: 16px;
+  color: #5b6d80;
+}
+
+.ptms-modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid #eef2f6;
+  padding-top: 14px;
+}
+
+.ptms-danger-btn {
+  border: 1px solid #d45b63;
+  border-radius: 8px;
+  padding: 9px 14px;
+  background: #d45b63;
+  color: #fff;
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.ptms-note-item {
+  border-left: 3px solid var(--green);
+  background: #f9fbfd;
+  border-radius: 0 10px 10px 0;
+  padding: 12px 15px;
+  display: grid;
+  gap: 6px;
+}
+
+.ptms-note-item header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.ptms-note-item p {
+  margin: 0;
+  font-size: 12px;
+  color: #3f5368;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 1080px) {
+  .ptms-grid-2,
+  .ptms-grid-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .ptms-form-grid,
+  .ptms-stop-stats {
+    grid-template-columns: 1fr;
+  }
+}

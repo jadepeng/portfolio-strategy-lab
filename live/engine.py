@@ -6,11 +6,172 @@ import pandas as pd
 
 from live.market import SYMBOLS, ZONES, RISK_SYMBOLS, validate_frame
 from live.backtest import run_bt_reference
+from live.store import clean_bool, clean_float
 from v18.integrated import build_cn_v18_weekly, build_us_v18
 from v20.integrated import run_advisory_cn, run_advisory_us, run_cn_v20, run_us_v20
 from v20.public_rules import V20Config
 from v21.analytics import describe, equity_curve, yearly, latest_weights, frozen_signal_record, verify_market_history
 from v22.intraday import StopConfig, IntradayStopEngine, normalize_bars, stop_line
+
+
+def extract_cn_indicators(p: pd.DataFrame, sig_df: pd.DataFrame, market_tape: pd.DataFrame) -> dict:
+    """Extract rich decision-grade CN indicators from already-computed V18 signals."""
+    s = sig_df.iloc[-1]
+    t = market_tape.iloc[-1]
+    ratio_series = market_tape.market_turn_100m.rolling(4).mean() / market_tape.market_turn_100m.rolling(13).mean()
+    m_turn = float(t.market_turn_100m) if float(t.market_turn_100m) > 0 else 1.0
+    tech_close = clean_float(s.get('tech'), ndigits=4)
+    red_close = clean_float(s.get('red'), ndigits=4)
+    bond_close = clean_float(s.get('bond_511260_adj'), ndigits=4)
+    gold_close = clean_float(s.get('gold_518880_adj'), ndigits=4)
+    money_close = clean_float(s.get('cash_511880_adj'), ndigits=4)
+    return {
+        'asof_week_start': str(sig_df.index[-1].date()),
+        'leader': str(s.get('leader', '')),
+        'tech': {
+            'close': tech_close,
+            'temperature': str(s.get('tech_temperature', '')),
+            'stage': int(s.get('tech_stage', 0)),
+            'mom_fast': clean_float(s.get('tech_mom_fast'), ndigits=5),
+            'mom_slow': clean_float(s.get('tech_mom_slow'), ndigits=5),
+            'momentum': clean_float(s.get('tech_momentum'), ndigits=5),
+            'r1': clean_float(s.get('tech_r1'), ndigits=5),
+            'ma_fast': clean_float(s.get('tech_ma_fast'), ndigits=4),
+            'ma_slow': clean_float(s.get('tech_ma_slow'), ndigits=4),
+            'ma_slope': clean_float(s.get('tech_ma_slope'), ndigits=6),
+            'below_ma': clean_bool(s.get('tech_below_ma')),
+            'breakout': clean_bool(s.get('tech_breakout')),
+            'vol': clean_float(s.get('tech_vol'), ndigits=5),
+            'dd': clean_float(s.get('tech_dd'), ndigits=5),
+            'vs_red_6w': clean_float(s.get('v9_tech_vs_red_6w'), ndigits=5),
+            'relative_mom': clean_float(s.get('relative'), ndigits=5),
+            'reentry_state': str(s.get('v8_reentry_state', 'off')),
+            'probe_signal': clean_bool(s.get('v8_probe_signal')),
+            'confirm_signal': clean_bool(s.get('v8_confirm_signal')),
+            'target_weight': clean_float(s.get('target_tech'), ndigits=5),
+        },
+        'red': {
+            'close': red_close,
+            'temperature': str(s.get('red_temperature', '')),
+            'stage': int(s.get('red_stage', 0)),
+            'mom_fast': clean_float(s.get('red_mom_fast'), ndigits=5),
+            'mom_slow': clean_float(s.get('red_mom_slow'), ndigits=5),
+            'momentum': clean_float(s.get('red_momentum'), ndigits=5),
+            'r1': clean_float(s.get('red_r1'), ndigits=5),
+            'ma_fast': clean_float(s.get('red_ma_fast'), ndigits=4),
+            'ma_slow': clean_float(s.get('red_ma_slow'), ndigits=4),
+            'ma_slope': clean_float(s.get('red_ma_slope'), ndigits=6),
+            'below_ma': clean_bool(s.get('red_below_ma')),
+            'breakout': clean_bool(s.get('red_breakout')),
+            'vol': clean_float(s.get('red_vol'), ndigits=5),
+            'dd': clean_float(s.get('red_dd'), ndigits=5),
+            'eligible': clean_bool(s.get('v6_red_eligible')),
+            'target_weight': clean_float(s.get('target_red'), ndigits=5),
+        },
+        'defensive': {
+            'bond_close': bond_close,
+            'bond_eligible': clean_bool(s.get('bond_eligible')),
+            'bond_trend': clean_bool(s.get('bond_trend')),
+            'bond_mom_fast': clean_float(s.get('bond_momentum_fast'), ndigits=5),
+            'bond_mom_slow': clean_float(s.get('bond_momentum_slow'), ndigits=5),
+            'bond_vol': clean_float(s.get('bond_vol'), ndigits=5),
+            'bond_target': clean_float(s.get('target_bond'), ndigits=5),
+            'gold_close': gold_close,
+            'gold_eligible': clean_bool(s.get('gold_eligible')),
+            'gold_trend': clean_bool(s.get('gold_trend')),
+            'gold_mom_fast': clean_float(s.get('gold_momentum_fast'), ndigits=5),
+            'gold_mom_slow': clean_float(s.get('gold_momentum_slow'), ndigits=5),
+            'gold_vol': clean_float(s.get('gold_vol'), ndigits=5),
+            'gold_target': clean_float(s.get('target_gold'), ndigits=5),
+            'money_close': money_close,
+            'money_target': clean_float(s.get('target_money'), ndigits=5),
+        },
+        'portfolio': {
+            'uncapped_vol': clean_float(s.get('uncapped_portfolio_vol'), ndigits=5),
+            'estimated_vol': clean_float(s.get('estimated_portfolio_vol'), ndigits=5),
+            'risk_multiplier': clean_float(s.get('portfolio_risk_multiplier'), ndigits=5),
+            'v10_reason': str(s.get('v10_reason', '')),
+            'v13_regime_active': clean_bool(s.get('v13_regime_active')),
+            'v13_explanation': str(s.get('v13_explanation', '')),
+            'v14_warning': clean_bool(s.get('v14_warning')),
+            'v14_reason': str(s.get('v14_reason', '')),
+            'market_weak': clean_bool(s.get('market_weak')),
+            'crowding_proxy': clean_bool(s.get('crowding_proxy')),
+            'growth_leader_weak': clean_bool(s.get('growth_leader_weak')),
+            'market_turn_100m': clean_float(t.market_turn_100m, ndigits=2),
+            'market_liquidity_ratio': clean_float(ratio_series.iloc[-1], ndigits=4),
+            'tech_share_pct': clean_float(float(t.tech_turn_100m) / m_turn * 100.0, ndigits=2),
+            'red_share_pct': clean_float(float(t.red_turn_100m) / m_turn * 100.0, ndigits=2),
+            'us_risk_state_lagged': str(s.get('us_risk_state_lagged', '')),
+            'us_source_week': str(pd.Timestamp(s['us_source_week']).date()) if pd.notna(s.get('us_source_week')) else None,
+            'cross_market_reason': str(s.get('cross_market_reason', '')),
+            'cross_market_tech_cut': clean_float(s.get('cross_market_tech_cut'), ndigits=5),
+        },
+    }
+
+
+def extract_us_indicators(p: pd.DataFrame, sig_df: pd.DataFrame) -> dict:
+    """Extract rich decision-grade US indicators from already-computed V18 signals."""
+    s = sig_df.iloc[-1]
+    qqq_close = float(p.QQQ.iloc[-1])
+    qqq_10w = float(p.QQQ.tail(10).mean())
+    qqq_20w = float(p.QQQ.tail(20).mean())
+    qqq_30w = float(p.QQQ.tail(30).mean())
+    return {
+        'asof_week_start': str(sig_df.index[-1].date()),
+        'risk_state': str(s.get('us_risk_state', '')),
+        'trend_decision': str(s.get('us_trend_decision', '')),
+        'trend_score': clean_float(s.get('us_v17_trend_score'), ndigits=4),
+        'realized_vol': clean_float(s.get('us_v17_realized_vol'), ndigits=5),
+        'vol_cap': 0.24,
+        'vol_multiplier': clean_float(s.get('us_v17_vol_mult'), ndigits=4),
+        'qqq_close': clean_float(qqq_close, ndigits=3),
+        'qqq_10w': clean_float(qqq_10w, ndigits=3),
+        'qqq_20w': clean_float(qqq_20w, ndigits=3),
+        'qqq_30w': clean_float(qqq_30w, ndigits=3),
+        'qqq_dist_10w_pct': clean_float((qqq_close / qqq_10w - 1.0) * 100.0, ndigits=2) if qqq_10w > 0 else None,
+        'qqq_dist_20w_pct': clean_float((qqq_close / qqq_20w - 1.0) * 100.0, ndigits=2) if qqq_20w > 0 else None,
+        'qqq_dist_30w_pct': clean_float((qqq_close / qqq_30w - 1.0) * 100.0, ndigits=2) if qqq_30w > 0 else None,
+        'qqq_1w': clean_float(s.get('qqq_1w'), ndigits=5),
+        'qqq_4w': clean_float(s.get('qqq_4w'), ndigits=5),
+        'above_30w': clean_bool(s.get('above_30w')),
+        'spy_close': clean_float(p.SPY.iloc[-1], ndigits=3),
+        'spy_13w': clean_float(s.get('spy_13w'), ndigits=3),
+        'spy_30w': clean_float(s.get('spy_30w'), ndigits=3),
+        'spy_4w': clean_float(s.get('spy_4w'), ndigits=5),
+        'smh_relative_4w': clean_float(s.get('smh_relative_4w'), ndigits=5),
+        'rsp_relative_4w': clean_float(s.get('rsp_relative_4w'), ndigits=5),
+        'us_bear': clean_bool(s.get('us_bear')),
+        'us_shock': clean_bool(s.get('us_shock')),
+        'us_warning': clean_bool(s.get('us_warning')),
+        'target_qqq': clean_float(s.get('target_qqq'), ndigits=5),
+        'target_bil': clean_float(s.get('target_bil'), ndigits=5),
+    }
+
+
+def build_research_indicators(root) -> dict:
+    """Compute baseline V18 indicators from offline verified snapshots for fallback use."""
+    try:
+        from pathlib import Path
+        from v14.market_snapshot import load_weekly
+        from v15.us_snapshot import load_us_prices, load_us_open
+
+        base_dir = Path(root)
+        cn_path = base_dir / 'market_data' / 'verified_5asset_weekly_v13.csv'
+        if not cn_path.exists():
+            return {}
+        cn = pd.read_csv(cn_path, parse_dates=['week_start']).set_index('week_start')
+        us = load_us_prices()
+        op = load_us_open()
+        tape = load_weekly()
+        _, cn_sig, _ = build_cn_v18_weekly(cn, tape, us)
+        us_sig, _ = build_us_v18(us, opens=op)
+        return {
+            'CN': extract_cn_indicators(cn, cn_sig, tape),
+            'US': extract_us_indicators(us, us_sig),
+        }
+    except Exception:
+        return {}
 
 
 def weekly_prices(daily, market, clock, now):
@@ -86,7 +247,7 @@ def recompute(daily, tape, clock, now, source):
     Re-downloaded adjusted history can revise old simulations; these results are
     labeled online recomputations, not stitched onto the frozen research NAV.
     """
-    result = {'models': {}, 'signals': {}, 'quality': [], 'frozen_signals': [],
+    result = {'models': {}, 'signals': {}, 'indicators': {}, 'quality': [], 'frozen_signals': [],
               'liquidity': [], 'strategy_status': {}, 'external_backtests': {}, 'computed_at': now.isoformat()}
     prices, opens, cutoffs = {}, {}, {}
     for market in ('CN', 'US'):
@@ -113,6 +274,7 @@ def recompute(daily, tape, clock, now, source):
                 'trend_score': float(sig.get('us_v17_trend_score', 0)), 'qqq_close': float(p.QQQ.iloc[-1]),
                 'qqq_ma30': float(p.QQQ.tail(30).mean()), 'spy_close': float(p.SPY.iloc[-1]),
                 'vol_multiplier': float(sig.get('us_v17_vol_mult', 1)), 'description': str(sig.us_trend_decision)}
+            result['indicators']['US'] = extract_us_indicators(p, base)
         except Exception as error:
             result['strategy_status']['US'] = {'state': 'unavailable', 'message': type(error).__name__ + '：策略重算失败'}
     if 'CN' in prices and 'US' in prices:
@@ -141,6 +303,7 @@ def recompute(daily, tape, clock, now, source):
                 'red_stage': str(sig.get('red_stage', '')), 'market_weak': bool(sig.get('market_weak', False)),
                 'tech_momentum_13w': float(sig.get('tech_mom_fast', 0)), 'market_liquidity_ratio': float(ratio.iloc[-1]),
                 'cross_market': str(sig.get('us_risk_state_lagged', '')), 'description': str(sig.get('cross_market_reason', ''))}
+            result['indicators']['CN'] = extract_cn_indicators(p, base, market_tape)
             result['liquidity'] = [{'d': str(t.date()), 'market_turn_100m': float(r.market_turn_100m),
                 'market_close': float(r.market_close), 'tech_share_pct': float(r.tech_turn_100m/r.market_turn_100m*100),
                 'red_share_pct': float(r.red_turn_100m/r.market_turn_100m*100),

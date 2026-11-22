@@ -58,11 +58,25 @@ SDK只创建 QuoteContext；不创建交易上下文。凭据仅由服务器进�
 - 最后一次成功响应原子保存到 `market_data/live_cache/last_good.json`。重启恢复时显示缓存状态，源时间戳保持不变。失败时保留最后数据并标注失败。
 - 服务只监听本机、只暴露指定接口与网页，不开放工作目录文件；刷新请求检查同源。无需数据库、Node服务、Redis或交易平台。
 
+## 个人交易管理系统（PTMS）扩展
+
+本地驾驶舱已从只读研究面板升级为双账户个人交易管理系统，新增 4 个交易视图（决策与调仓台、持仓与账本、策略指标雷达、交易复盘中心）：
+
+- **持久化账本与风控状态**：所有资金流水、买卖成交、对账校准、决策票据、V22 盘中移动止损与冷却锁及周/日复盘笔记均保存于 `market_data/personal_trading.db`（SQLite WAL 模式，随 `market_data/` 默认被 `.gitignore` 忽略）。
+- **周频与日内非对称仲裁**：周频 V18 负责攻防再平衡，日内 V22 30 分钟完整 K 线仅负责有效跌破分级减仓并触发 3 个交易日冷却期；冷却期内周频加仓自动拦截并转入现金管理资产（`511880.SH` / `BIL.US`）。A 股 ETF 自动遵循 100 股整数手与 T+0/T+1 制度约束并保护长期核心底仓。
+- **PTMS 接口**：
+  - `GET /api/ptms/state`：获取双账户持仓投影、全量策略指标、盘中止损状态与可执行调仓单。
+  - `GET /api/ptms/review?account_id=CN_MAIN`：计算剔除出入金干扰的时间加权实盘净值 (TWR)、滑点 bp 与纪律遵守率。
+  - `GET /api/ptms/export?account_id=CN_MAIN&format=markdown|json`：导出 Markdown 复盘报告或 JSON 账本备份。
+  - `POST /api/ptms/ledger/{init,event,reconcile}`、`POST /api/ptms/account/config`、`POST /api/ptms/decisions/{create,execute,skip}`、`POST /api/ptms/stops/reset`、`POST /api/ptms/review/note`（仅限本机同源 JSON 请求）。
+
 ```powershell
-python -m pytest tests/test_live_dashboard.py -q
+python -m pytest tests/test_ptms.py tests/test_live_dashboard.py -q
 python -m pytest tests -q
 node --check web/v21.js
+node --check web/ptms.js
 node tests/dashboard_smoke.cjs
+node tests/ptms_smoke.cjs
 ```
 
 本次开发环境不允许外部DNS与TCP访问，新增可选包未能在线安装；行情端到端和真实 bt 库执行须在可联网环境完成。本地测试验证原策略重算、时间隔离、缺失数据、故障标记、HTTP处理与并发合并；可选 bt 实库测试在安装依赖后自动执行。

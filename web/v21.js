@@ -4,7 +4,7 @@ const RESEARCH=JSON.parse(document.getElementById('v21-data').textContent);
 let D=RESEARCH;
 const state={view:'overview',overviewRegion:'CN',period:'2026',cnVersion:'baseline',usVersion:'baseline',cnPeriod:'all',usPeriod:'all',riskMarket:'US',tradeMarket:'CN',tradeVersion:'baseline',tradeFilter:'all',tradeQuery:'',tradePage:0};
 const assetColor={tech:'#6174e7',red:'#1aa98b',bond:'#5776b5',gold:'#dfaf58',money:'#b1bdcb',qqq:'#5378de',bil:'#b3becb'};
-const titles={overview:['总览驾驶舱','中美双市场策略驾驶舱','同一份研究快照，追踪A股五资产、美股趋势仓和跨市场风险。可核验收益、仓位、信号、执行成本与模型局限。'],cn:['A股策略','A股五资产趋势轮动','趋势动物纪律、资金量能、条件式防守与五资产风险预算。支持版本比较、目标仓位和模拟实持对照。'],us:['美股策略','美股趋势与风险预算','QQQ长期核心、多周期趋势及双动量外部否决；两套研究版本独立回测，保留成交时点差异。'],cross:['中美联动','美股隔夜与A股风控','只在信息真正公开后传递风险信号，避免将美股周五收盘提前用作中国同周的交易依据。'],intraday:['盘中减仓线','盘中有效跌破减仓线','前一日冻结风险线、30分钟确认、下一根可交易K线执行，分档减仓与冷却；不包含实时券商数据。'],risk:['稳健性审计','执行成本与模型稳健性','比较双倍费用、不同成交时点以及统计不确定性。候选策略没有通过独立样本外测试。'],trades:['交易与记录','逐周交易与信号档案','查看可追溯的研究账本、真实模拟目标与持仓，并冻结当前信号用于未来对照。']};
+const titles={desk:['决策与调仓台','个人交易决策与调仓','周频目标再平衡、盘中30分钟有效破位防守、冷却拦截与精确到股数的半自动执行清单。'],portfolio:['持仓与账本','真实持仓与资金账本','不可变事件账本投影出双市场实时市值、T+1可卖股数、浮动/已实现盈亏与券商对账校准。'],indicators:['策略指标雷达','双市场策略指标雷达','完整透明展示趋势温度、动量、均线位置、波动率刹车、市场量能、跨市场滞后风险与日内止损参数。'],review:['交易复盘中心','个人交易复盘与归因','对比实盘份额净值（TWR）与策略同期表现，审计滑点、执行漂移、纪律遵守率并沉淀周/日复盘笔记。'],overview:['总览驾驶舱','中美双市场策略驾驶舱','同一份研究快照，追踪A股五资产、美股趋势仓和跨市场风险。可核验收益、仓位、信号、执行成本与模型局限。'],cn:['A股策略','A股五资产趋势轮动','趋势动物纪律、资金量能、条件式防守与五资产风险预算。支持版本比较、目标仓位和模拟实持对照。'],us:['美股策略','美股趋势与风险预算','QQQ长期核心、多周期趋势及双动量外部否决；两套研究版本独立回测，保留成交时点差异。'],cross:['中美联动','美股隔夜与A股风控','只在信息真正公开后传递风险信号，避免将美股周五收盘提前用作中国同周的交易依据。'],intraday:['盘中减仓线','盘中有效跌破减仓线','前一日冻结风险线、30分钟确认、下一根可交易K线执行，分档减仓与冷却；不包含实时券商数据。'],risk:['稳健性审计','执行成本与模型稳健性','比较双倍费用、不同成交时点以及统计不确定性。候选策略没有通过独立样本外测试。'],trades:['交易与记录','逐周交易与信号档案','查看可追溯的研究账本、真实模拟目标与持仓，并冻结当前信号用于未来对照。']};
 const $=id=>document.getElementById(id);
 const fmt=(x,n=2)=>Number(x).toLocaleString('zh-CN',{minimumFractionDigits:n,maximumFractionDigits:n});
 const pct=(x,n=2)=>`${Number(x)>=0?'+':''}${fmt(x,n)}%`;
@@ -112,7 +112,7 @@ function drawIntraday(){
   $('guard-chart').innerHTML=`<svg class="guard-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="${symbols[sym]}30分钟收盘与预设减仓线">${grid}<path d="${stops}" fill="none" stroke="#e7a44b" stroke-width="2.3" stroke-dasharray="8 5"/><path d="${segments}" fill="none" stroke="#5378de" stroke-width="2.6" stroke-linejoin="round"/>${markers}<text x="${pad.left}" y="${H-12}" fill="#8492a4" font-size="12">${points[0].d.slice(0,16)}</text><text x="${W-pad.right}" y="${H-12}" text-anchor="end" fill="#8492a4" font-size="12">${points[points.length-1].d.slice(0,16)}</text></svg><div class="guard-chart-legend"><span><i style="background:#5378de"></i>30分钟收盘价</span><span><i style="background:#e7a44b"></i>冻结风险线</span><span><i style="background:#cf646e"></i>减仓模拟成交</span></div>`;
  }else $('guard-chart').innerHTML='<div class="empty">没有可绘制的盘中行情</div>';
 }
-function renderView(){requestAnimationFrame(()=>{if(state.view==='overview')drawOverview();if(state.view==='cn')drawCN();if(state.view==='us')drawUS();if(state.view==='cross')drawCross();if(state.view==='risk')drawRisk();if(state.view==='intraday')drawIntraday();if(state.view==='trades')renderTrades();});}
+function renderView(){requestAnimationFrame(()=>{if(state.view==='overview')drawOverview();if(state.view==='cn')drawCN();if(state.view==='us')drawUS();if(state.view==='cross')drawCross();if(state.view==='risk')drawRisk();if(state.view==='intraday')drawIntraday();if(state.view==='trades')renderTrades();if(typeof window.__ptmsRender==='function')window.__ptmsRender(state.view);});}
 for(const b of document.querySelectorAll('.nav-item'))b.addEventListener('click',()=>navTo(b.dataset.view));
 for(const b of document.querySelectorAll('[data-goto]'))b.addEventListener('click',()=>navTo(b.dataset.goto));
 for(const b of document.querySelectorAll('#overview-market [data-region]'))b.addEventListener('click',()=>{state.overviewRegion=b.dataset.region;document.querySelectorAll('#overview-market button').forEach(x=>x.classList.toggle('selected',x===b));drawOverview()});
@@ -146,6 +146,7 @@ function applyEnvelope(){
  $('display-basis').textContent=basis.join(' / ');
  $('data-scope').textContent=basis.join('；')+'。收益、目标与模拟持仓按所标注数据集计算。稳健性审计、隔夜事件和下方V22历史回放保留原研究截点；在线观察不推断真实成交。';
  renderView();renderLive();
+ if(typeof window.__ptmsOnLive==='function')window.__ptmsOnLive(lastEnvelope);
 }
 function renderLive(){
  const e=lastEnvelope,st=e?.status,live=e?.live,connectionFailed=!!lastFailure||(lastPoll&&Date.now()-lastPoll>45000);
@@ -188,5 +189,6 @@ $('live-refresh').addEventListener('click',()=>pollLive(true));
 $('live-pause').addEventListener('click',()=>{paused=!paused;$('live-pause').textContent=paused?'恢复刷新':'暂停刷新';if(!paused)pollLive();renderLive()});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!paused)pollLive()});
 setInterval(()=>{renderLive();if(!document.hidden)pollLive()},15000);
+window.__quantlabNavTo=navTo;
 navTo('overview');applyEnvelope();pollLive();
 })();

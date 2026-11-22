@@ -11,7 +11,14 @@
   <div class="app-shell" id="app">
     <aside class="sidebar" aria-label="主导航">
       <div class="brand"><div class="brand-mark"><span>Q</span></div><div class="brand-copy"><strong>QUANT<span>LAB</span></strong><small>PORTFOLIO INTELLIGENCE</small></div></div>
-      <div class="side-subtitle">WORKSPACE <span class="side-dash"></span></div>
+      <div class="side-subtitle">TRADING OS <span class="side-dash"></span></div>
+      <nav class="nav-list" id="ptms-nav" aria-label="个人交易管理">
+        <button class="nav-item" data-view="desk"><span class="nav-icon">◈</span><span>决策与调仓台</span><span class="nav-count">T1</span></button>
+        <button class="nav-item" data-view="portfolio"><span class="nav-icon">▤</span><span>持仓与账本</span><span class="nav-count">T2</span></button>
+        <button class="nav-item" data-view="indicators"><span class="nav-icon">◎</span><span>策略指标雷达</span><span class="nav-count">T3</span></button>
+        <button class="nav-item" data-view="review"><span class="nav-icon">✦</span><span>交易复盘中心</span><span class="nav-count">T4</span></button>
+      </nav>
+      <div class="side-subtitle" style="margin-top:16px">RESEARCH &amp; AUDIT <span class="side-dash"></span></div>
       <nav class="nav-list" id="nav" aria-label="研究视图">
         <button class="nav-item active" data-view="overview"><span class="nav-icon">◫</span><span>总览驾驶舱</span><span class="nav-count">01</span></button>
         <button class="nav-item" data-view="cn"><span class="nav-icon">▥</span><span>A股策略</span><span class="nav-count">02</span></button>
@@ -46,6 +53,22 @@
           <div id="live-strategies" class="live-strategies"></div>
           <details class="live-details"><summary>数据源与刷新详情</summary><p id="live-details">等待连接</p></details>
           <div class="soft-foot" id="data-scope">周频模型只读取完整交易周；报价不直接改变周频目标。行情可能延迟。历史研究与在线重算使用独立数据集，收益不拼接。</div>
+        </section>
+
+        <section id="view-desk" class="view" aria-label="决策与调仓台">
+          <div id="ptms-desk-root" class="ptms-shell"><div class="panel"><p class="empty">个人交易决策台需要通过本地服务访问：运行 <code>python scripts/serve_dashboard.py</code> 后打开 <code>http://127.0.0.1:8765</code>。</p></div></div>
+        </section>
+
+        <section id="view-portfolio" class="view" aria-label="持仓与账本">
+          <div id="ptms-portfolio-root" class="ptms-shell"><div class="panel"><p class="empty">真实持仓与账本需要通过本地服务访问。</p></div></div>
+        </section>
+
+        <section id="view-indicators" class="view" aria-label="策略指标雷达">
+          <div id="ptms-indicators-root" class="ptms-shell"><div class="panel"><p class="empty">完整策略指标雷达需要通过本地服务访问。</p></div></div>
+        </section>
+
+        <section id="view-review" class="view" aria-label="交易复盘中心">
+          <div id="ptms-review-root" class="ptms-shell"><div class="panel"><p class="empty">交易复盘与 TWR 归因中心需要通过本地服务访问。</p></div></div>
         </section>
 
         <section id="view-overview" class="view active" aria-label="总览驾驶舱">
@@ -131,6 +154,7 @@
       </main>
     </div>
   </div>
+  <div id="ptms-modal-host" class="ptms-modal-host" hidden></div>
   <div class="floating-tooltip" id="hover-tip" hidden role="tooltip"></div>
   <script id="v21-data" type="application/json">V21_DATA_JSON</script>
   <script>/* V21_CODE */</script>
