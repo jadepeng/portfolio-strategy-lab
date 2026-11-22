@@ -9,8 +9,8 @@ ROOT=Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
 from fusion_v6 import V6Config,v6_base
 from fusion_v7 import V7Config,simulate_v7
-from fusion_v8 import V8Config
-from fusion_v9 import signals_v9
+from history.strategies.fusion_v8 import V8Config
+from history.strategies.fusion_v9 import signals_v9
 from fusion_v10 import V10Config,signals_v10,simulate_v10,baseline_5asset_signals,results,TARGETS,PRICES
 
 P=pd.read_csv(ROOT/'market_data/longbridge_5asset_fwd_2020_2026_v10.csv',parse_dates=['week_start']).set_index('week_start')

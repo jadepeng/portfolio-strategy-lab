@@ -6,8 +6,8 @@ import sys
 import pandas as pd
 root=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(root))
-from trend_animal_v4 import TrendAnimalV4Config,backtest_v4,get_stage_snapshot
-from v3_engine import V3Config,run_v3,metrics
+from history.strategies.trend_animal_v4 import TrendAnimalV4Config,backtest_v4,get_stage_snapshot
+from history.strategies.v3_engine import V3Config,run_v3,metrics
 
 src=root/'market_data/longbridge_2016_2026_tech_dividend_prices.csv'
 df=pd.read_csv(src,parse_dates=['week_start']).set_index('week_start')

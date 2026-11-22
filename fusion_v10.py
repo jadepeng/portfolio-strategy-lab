@@ -16,8 +16,8 @@ import pandas as pd
 from fusion_v5 import FusionConfig
 from fusion_v6 import V6Config
 from fusion_v7 import V7Config
-from fusion_v8 import V8Config
-from fusion_v9 import V9Config, signals_v9
+from history.strategies.fusion_v8 import V8Config
+from history.strategies.fusion_v9 import V9Config, signals_v9
 
 ASSETS=('tech','red','bond','gold','money')
 PRICES=('tech','red','bond_511260_adj','gold_518880_adj','cash_511880_adj')

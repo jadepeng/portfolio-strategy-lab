@@ -6,8 +6,8 @@ ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
 from fusion_v10 import *
 from fusion_v6 import v6_base,V6Config
 from fusion_v7 import V7Config,simulate_v7
-from fusion_v8 import V8Config
-from fusion_v9 import V9Config,signals_v9,simulate_v9
+from history.strategies.fusion_v8 import V8Config
+from history.strategies.fusion_v9 import V9Config,signals_v9,simulate_v9
 from fusion_v5 import metrics
 p=pd.read_csv(ROOT/'market_data/longbridge_5asset_fwd_2020_2026_v10.csv',parse_dates=['week_start']).set_index('week_start')
 base=v6_base('week');model=V6Config(); cash=V7Config(red_core=.30,cash_mode='money_price',money_etf_side_cost=.0001)

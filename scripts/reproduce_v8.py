@@ -9,7 +9,7 @@ sys.path.insert(0,str(ROOT))
 from fusion_v5 import metrics
 from fusion_v6 import v6_base,V6Config
 from fusion_v7 import V7Config,simulate_v7
-from fusion_v8 import V8Config,signals_v8,simulate_v8
+from history.strategies.fusion_v8 import V8Config,signals_v8,simulate_v8
 
 p_etf=ROOT/'market_data/longbridge_etf_fwd_2020_2026_v7_money.csv'
 p_index=ROOT/'market_data/longbridge_2016_2026_tech_dividend_prices.csv'

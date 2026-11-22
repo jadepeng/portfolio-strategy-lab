@@ -5,7 +5,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 import numpy as np, pandas as pd, pytest
 from fusion_v6 import V6Config,v6_base
 from fusion_v7 import V7Config
-from fusion_v9_execution import simulate_v9_execution,V9ExecutionConfig
+from history.strategies.fusion_v9_execution import simulate_v9_execution,V9ExecutionConfig
 
 @pytest.fixture(scope='module')
 def sample():

@@ -5,7 +5,7 @@ import sys,json,hashlib
 import pandas as pd
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
 from fusion_v5 import FusionConfig,weekly_config,compare,metrics,simulate
-from trend_animal_v4 import TrendAnimalV4Config,build_temperature_signals
+from history.strategies.trend_animal_v4 import TrendAnimalV4Config,build_temperature_signals
 
 DATA={
     'daily':('market_data/longbridge_daily_2026.csv','date',FusionConfig()),

@@ -11,9 +11,9 @@ if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
 from fusion_v5 import metrics
 from fusion_v6 import v6_base, V6Config
 from fusion_v7 import V7Config, simulate_v7
-from fusion_v8 import V8Config, simulate_v8
-from fusion_v9 import V9Config, simulate_v9
-from fusion_v9_execution import V9ExecutionConfig, simulate_v9_execution
+from history.strategies.fusion_v8 import V8Config, simulate_v8
+from history.strategies.fusion_v9 import V9Config, simulate_v9
+from history.strategies.fusion_v9_execution import V9ExecutionConfig, simulate_v9_execution
 
 st.set_page_config(page_title='V9 稳健回补与风险预算',page_icon='🧭',layout='wide')
 st.title('V9｜创业板有条件买回 × 红利核心 × 货币ETF')

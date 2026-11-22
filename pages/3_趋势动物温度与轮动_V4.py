@@ -8,8 +8,8 @@ import streamlit as st
 
 ROOT=Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
-from trend_animal_v4 import TrendAnimalV4Config,backtest_v4,get_stage_snapshot,STAGES
-from v3_engine import V3Config,run_v3,metrics
+from history.strategies.trend_animal_v4 import TrendAnimalV4Config,backtest_v4,get_stage_snapshot,STAGES
+from history.strategies.v3_engine import V3Config,run_v3,metrics
 
 st.set_page_config(page_title='趋势动物×红利科技 V4',page_icon='🌡️',layout='wide')
 st.title('V4｜趋势动物温度 × 红利科技轮动')

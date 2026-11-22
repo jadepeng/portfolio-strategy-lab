@@ -159,6 +159,10 @@ python -m pytest tests -q
 
 ---
 
+## 📚 旧版策略归档
+
+根目录的历史 V3/V4、V8/V9 策略和 V4—V11 研究报告已整理至 [history/](history/README.md)。保留旧版 Streamlit 页面和回测脚本，它们的模块导入路径已同步修正。V18—V22 正在使用的共享核心模块、线上交易账本和风控逻辑保持不变。
+
 ## 📄 开源许可证
 
 本项目基于 [MIT License](LICENSE) 开源发布。保留所有权利。  

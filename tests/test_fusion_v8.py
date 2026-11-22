@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from fusion_v6 import v6_base,V6Config
 from fusion_v7 import V7Config,simulate_v7
-from fusion_v8 import V8Config,signals_v8,simulate_v8
+from history.strategies.fusion_v8 import V8Config,signals_v8,simulate_v8
 
 @pytest.fixture(scope='module')
 def prices():
