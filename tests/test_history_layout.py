@@ -21,10 +21,10 @@ def test_legacy_module_imports_from_history(name):
 def test_active_strategy_chains_import_after_archive():
     from history.strategies.fusion_v10 import V10Config
     from history.strategies.fusion_v11 import V11Config
-    from history.v18.integrated import ChinaPortfolioConfig as ArchivedV18CNConfig
+    from history.v18.integrated import V18CNConfig as ArchivedPortfolioConfig
     from strategy_core.portfolio import ChinaPortfolioConfig
     from strategy_core.advisory import evaluate_china_rule_blend
-    assert V10Config and V11Config and ChinaPortfolioConfig and ArchivedV18CNConfig and evaluate_china_rule_blend
+    assert V10Config and V11Config and ChinaPortfolioConfig and ArchivedPortfolioConfig and evaluate_china_rule_blend
 
 def test_no_legacy_root_imports_remain():
     legacy = "|".join(re.escape(name) for name in LEGACY)

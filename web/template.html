@@ -29,7 +29,7 @@
         <button class="nav-item" data-view="trades"><span class="nav-icon">≡</span><span>交易与记录</span><span class="nav-count">07</span></button>
       </nav>
       <div class="sidebar-bottom">
-        <div class="side-info"><span class="signal-dot"></span><span>冻结研究基准 <strong>V18</strong></span></div>
+        <div class="side-info"><span class="signal-dot"></span><span>冻结研究基准 <strong>多资产稳健基准</strong></span></div>
         <div class="side-grid"><span>STATUS</span><strong>RESEARCH</strong><span>BUILD</span><strong>V22.0</strong></div>
         <p>行情与策略在线跟踪<br />不连接交易 · 不自动下单</p>
       </div>
@@ -90,10 +90,10 @@
 
         <section id="view-cn" class="view" aria-label="A股策略">
           <div class="section-header"><div><span class="micro">02 / CHINA EQUITIES & DEFENSIVE ASSETS</span><h2>A股五资产轮动</h2></div><span class="info-chip">159915 · 515180 · 511260 · 518880 · 511880</span></div>
-          <div class="mode-bar"><label>研究版本 <select id="cn-version"><option value="baseline">V18冻结基准（默认）</option><option value="advisory">V20双重否决（研究）</option><option value="blend25">25%公开策略融合（研究）</option></select></label><label>图表区间 <select id="cn-period"><option value="all">全部历史</option><option value="2023">2023年至今</option><option value="2026">2026年至今</option></select></label><span class="mode-warning">2026已参与历史调参 · 非样本外</span></div>
+          <div class="mode-bar"><label>研究版本 <select id="cn-version"><option value="baseline">稳健组合基准（默认）</option><option value="advisory">双重风控建议（研究）</option><option value="blend25">25%公开策略融合（研究）</option></select></label><label>图表区间 <select id="cn-period"><option value="all">全部历史</option><option value="2023">2023年至今</option><option value="2026">2026年至今</option></select></label><span class="mode-warning">2026已参与历史调参 · 非样本外</span></div>
           <div class="mini-metrics" id="cn-metrics"></div>
           <div class="dashboard-two">
-            <article class="panel main-chart"><div class="panel-top"><div><span class="micro">NET ASSET VALUE</span><h3>A股净值回测对照</h3></div></div><div id="cn-chart" class="chart-stage expanded"></div><div class="chart-footer">V18与所选研究版本统一使用下一周收盘成交</div></article>
+            <article class="panel main-chart"><div class="panel-top"><div><span class="micro">NET ASSET VALUE</span><h3>A股净值回测对照</h3></div></div><div id="cn-chart" class="chart-stage expanded"></div><div class="chart-footer">当前基准与研究对照统一使用下一周收盘成交</div></article>
             <article class="panel asset-panel"><div class="panel-top"><div><span class="micro">TARGET VS HELD</span><h3>五资产目标与实持</h3></div></div><div id="cn-weights" class="weight-detail"></div><div class="soft-foot">已持仓位为最后一根周线收盘后的模拟值；下一次调仓仍须等待可交易价格。</div></article>
           </div>
           <article class="panel full"><div class="panel-top"><div><span class="micro">ANNUAL RETURNS</span><h3>年度收益与风险归因</h3></div></div><div class="yearly-layout"><div id="cn-years" class="yearly-chart"></div><div class="yearly-explain"><h4>为什么不因美股急跌而直接卖创业板？</h4><p>美股隔夜价格是风险上下文；A股自身趋势、流动性与原有止损纪律才决定真实仓位。2026年单凭美股急跌触发强制减仓，在V16实验中反而损害收益。</p><button class="text-action" data-goto="cross">查看中美联动详情 <span>→</span></button></div></div></article>
@@ -101,7 +101,7 @@
 
         <section id="view-us" class="view" aria-label="美股策略">
           <div class="section-header"><div><span class="micro">03 / US EQUITIES & TREASURIES</span><h2>美股趋势与长期核心</h2></div><span class="info-chip">QQQ · BIL · SPY · SMH · RSP</span></div>
-          <div class="mode-bar"><label>研究版本 <select id="us-version"><option value="baseline">V18多周期趋势（默认）</option><option value="advisory">V20双重否决（研究）</option><option value="blend25">25%公开策略融合（研究）</option></select></label><label>图表区间 <select id="us-period"><option value="all">全部历史</option><option value="2023">2023年至今</option><option value="2026">2026年至今</option></select></label><span class="mode-warning">美股成交：次周开盘 · 非实盘</span></div>
+          <div class="mode-bar"><label>研究版本 <select id="us-version"><option value="baseline">多周期趋势基准（默认）</option><option value="advisory">双重风控建议（研究）</option><option value="blend25">25%公开策略融合（研究）</option></select></label><label>图表区间 <select id="us-period"><option value="all">全部历史</option><option value="2023">2023年至今</option><option value="2026">2026年至今</option></select></label><span class="mode-warning">美股成交：次周开盘 · 非实盘</span></div>
           <div id="us-metrics" class="mini-metrics"></div>
           <div class="dashboard-two">
             <article class="panel main-chart"><div class="panel-top"><div><span class="micro">NET ASSET VALUE</span><h3>QQQ / BIL策略对照</h3></div></div><div id="us-chart" class="chart-stage expanded"></div><div class="chart-footer">30%长期核心QQQ；70%战术仓按趋势调整</div></article>
@@ -145,7 +145,7 @@
 
         <section id="view-trades" class="view" aria-label="交易与记录">
           <div class="section-header"><div><span class="micro">06 / EXECUTION JOURNAL</span><h2>逐周交易与前瞻记录</h2></div><button id="export-trades" class="solid-button">⇩ 导出当前交易明细</button></div>
-          <div class="mode-bar"><label>市场 <select id="trade-market"><option value="CN">A股</option><option value="US">美股</option></select></label><label>版本 <select id="trade-version"><option value="baseline">V18冻结基准</option><option value="advisory">V20双重否决</option><option value="blend25">25%公开规则融合</option></select></label><label>筛选 <select id="trade-filter"><option value="all">全部交易周</option><option value="changed">仅发生调仓</option><option value="2026">2026年</option></select></label><div class="input-search"><span>⌕</span><input id="trade-query" placeholder="查找日期，例如 2026-10" aria-label="按日期过滤" /></div></div>
+          <div class="mode-bar"><label>市场 <select id="trade-market"><option value="CN">A股</option><option value="US">美股</option></select></label><label>版本 <select id="trade-version"><option value="baseline">稳健组合基准</option><option value="advisory">双重风控建议</option><option value="blend25">25%公开规则融合</option></select></label><label>筛选 <select id="trade-filter"><option value="all">全部交易周</option><option value="changed">仅发生调仓</option><option value="2026">2026年</option></select></label><div class="input-search"><span>⌕</span><input id="trade-query" placeholder="查找日期，例如 2026-10" aria-label="按日期过滤" /></div></div>
           <article class="panel full"><div class="panel-top"><div><span class="micro">HISTORICAL SIMULATED TRADES</span><h3>可检查的模拟成交账本</h3></div><span class="info-chip" id="trade-count"></span></div><div class="table-wrap"><table id="trade-table"><thead><tr><th>交易周</th><th>模拟净值</th><th>本周收益</th><th>换手</th><th>模拟成本</th><th>权益类实际持仓</th><th>信号</th></tr></thead><tbody></tbody></table></div><div class="pagination"><span id="trade-page-label"></span><div><button id="trade-prev" aria-label="上一页">←</button><button id="trade-next" aria-label="下一页">→</button></div></div></article>
           <article class="panel full"><div class="panel-top"><div><span class="micro">FORWARD SIGNAL FREEZE</span><h3>前瞻信号锁定卡</h3></div><button class="ghost-button" id="export-forward">⇩ 下载冻结记录 JSON</button></div><div id="forward-records" class="frozen-grid"></div><div class="soft-foot">这是截至2026-11-20的研究快照，不是已发送订单。后续可将新一周真实信号与实际成交追加记录，不应回写历史已冻结信号。</div></article>
         </section>

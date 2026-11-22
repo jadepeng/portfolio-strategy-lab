@@ -163,7 +163,7 @@ python -m pytest tests -q
 
 ## 📚 现行策略与历史策略的边界
 
-- **现行研发入口：** [`strategy_core/`](strategy_core/README.md)。它持有独立的 A 股 / 美股策略、市场状态、盘中减仓、风控、行情分析及必要的基础模型副本。`live/` 和当前研究看板只导入 `strategy_core`，今后优化策略应修改这里，并保持接口测试通过。
+- **现行研发入口：** [`strategy_core/api.py`](strategy_core/api.py)（[接口契约](docs/STRATEGY_API.md)）。它持有独立的 A 股 / 美股策略、市场状态、盘中减仓、风控、行情分析及必要的基础模型副本；所有现行函数、配置类、模块和信号列均采用业务语义命名，不再携带 V17/V18/V20 等研发版本号。`live/` 和当前研究看板统一导入稳定入口 `strategy_core.api`，今后优化只修改现行实现，不改变 `history/` 冻结版本。
 - **历史归档：** [`history/`](history/README.md) 保存 V1—V22 的研究源码（含 `history/v13/` 到 `history/v22/`）、研究报告、旧版应用及验证结果。历史回测脚本和历史研究页面继续依赖归档版本，避免被现行策略迭代改变结论。
 - **旧版 Streamlit：** `run_linux.sh` / `run_windows.bat` 仍可启动 `history/apps/app.py` 及其 `history/apps/pages/` 中的 18 个历史研究页面，但正式交易决策台请使用 `run_dashboard_linux.sh` / `run_dashboard_windows.bat`。
 - **验证数据：** 根目录原 `verified_*.json` 迁至 `history/verification/`，`market_data/` 与 `research_outputs/` 维持原路径。

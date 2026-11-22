@@ -4,8 +4,8 @@
   const STORAGE_KEY = 'ptms.activeAccount';
   const TEMP_LEVELS = ['冻', '寒', '凉', '平', '温', '热', '沸'];
   const VERSION_LABELS = {
-    baseline: 'V18 稳健基准',
-    advisory: 'V20 双重风控',
+    baseline: '稳健组合基准',
+    advisory: '双重风控建议',
     blend25: '25% 混合增强',
   };
   const ACCOUNT_NAMES = {
@@ -702,7 +702,7 @@
         </div>
         <div class="ptms-kv-list" style="margin-top:12px">
           <div class="ptms-kv-row"><span>创业板成交占比 / 红利成交占比</span><strong>${fmtNum(cn.portfolio.tech_share_pct, 1)}% / ${fmtNum(cn.portfolio.red_share_pct, 1)}%</strong></div>
-          <div class="ptms-kv-row"><span>组合风控与量价状态</span><strong>${esc(translateText(cn.portfolio.v10_reason))} · ${cn.portfolio.v14_warning ? '顶部量价预警激活' : '量价状态正常'}</strong></div>
+          <div class="ptms-kv-row"><span>组合风控与量价状态</span><strong>${esc(translateText(cn.portfolio.allocation_reason))} · ${cn.portfolio.market_warning ? '顶部量价预警激活' : '量价状态正常'}</strong></div>
         </div>
       </article>
     ` : '<div class="panel"><p class="empty">暂无 A 股完整周频指标</p></div>';
@@ -1323,8 +1323,8 @@
         <div class="ptms-field">
           <label>主执行策略</label>
           <select name="strategy_version">
-            <option value="baseline" ${account.strategy_version === 'baseline' ? 'selected' : ''}>V18 稳健基准</option>
-            <option value="advisory" ${account.strategy_version === 'advisory' ? 'selected' : ''}>V20 双重风控</option>
+            <option value="baseline" ${account.strategy_version === 'baseline' ? 'selected' : ''}>稳健组合基准</option>
+            <option value="advisory" ${account.strategy_version === 'advisory' ? 'selected' : ''}>双重风控建议</option>
             <option value="blend25" ${account.strategy_version === 'blend25' ? 'selected' : ''}>25% 混合增强</option>
           </select>
         </div>
