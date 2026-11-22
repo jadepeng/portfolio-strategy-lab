@@ -54,7 +54,7 @@ for k,(file,datefield,c) in DATA.items():
                    'cash_target':float(selected.iloc[-1].target_cash)},
    'windows':{key:{name:standard(metrics(res,start,end)) for name,res in results.items()}
                 for key,(start,end) in windows[k].items()}}
-manifest=ROOT/'verified_fusion_v5_results.json'
+manifest=ROOT/'history/verification/verified_fusion_v5_results.json'
 manifest.write_text(json.dumps(out,ensure_ascii=False,indent=2,allow_nan=False),encoding='utf-8')
 print('manifest',manifest)
 for freq in ['weekly','daily']:

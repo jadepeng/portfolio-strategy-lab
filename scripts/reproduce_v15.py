@@ -9,12 +9,12 @@ from history.strategies.fusion_v6 import v6_base,V6Config
 from history.strategies.fusion_v7 import V7Config
 from history.strategies.fusion_v10 import V10Config,simulate_v10,results,TARGETS
 from history.strategies.fusion_v11 import V11Config,signals_v11
-from v13.regime_v13 import RegimeConfig,signals_v13
-from v14.market_snapshot import load_weekly
-from v14.crowding import build_factors,classify,state_overlay,OverlayStateConfig
-from v15.us_snapshot import load_us_prices
-from v15.us_strategy import USConfig,us_signals,simulate_us
-from v15.cross_market import CrossConfig,us_to_cn_overlay
+from history.v13.regime_v13 import RegimeConfig,signals_v13
+from history.v14.market_snapshot import load_weekly
+from history.v14.crowding import build_factors,classify,state_overlay,OverlayStateConfig
+from history.v15.us_snapshot import load_us_prices
+from history.v15.us_strategy import USConfig,us_signals,simulate_us
+from history.v15.cross_market import CrossConfig,us_to_cn_overlay
 
 p=pd.read_csv(ROOT/'market_data/verified_5asset_weekly_v13.csv',parse_dates=['week_start']).set_index('week_start')
 market=load_weekly()

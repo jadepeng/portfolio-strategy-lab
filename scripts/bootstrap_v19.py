@@ -5,9 +5,9 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 import numpy as np
 import pandas as pd
-from v14.market_snapshot import load_weekly
-from v15.us_snapshot import load_us_prices,load_us_open
-from v19.ensemble import V19Config,build_cn_v19,build_us_v19
+from history.v14.market_snapshot import load_weekly
+from history.v15.us_snapshot import load_us_prices,load_us_open
+from history.v19.ensemble import V19Config,build_cn_v19,build_us_v19
 
 def block_bootstrap_diff(nav_a,nav_b,seed=20261121,replications=4000,block_size=8):
     """Annualized paired log-return gap (a-b), with overlapping 8-week resamples."""

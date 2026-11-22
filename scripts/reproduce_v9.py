@@ -111,7 +111,7 @@ for label,prices in inputs.items():
         df=simulate_v9(prices,base,model,c,v9,v8)
         output['parameter_stability'][label][f'red_core_{core:.0%}']={k:metrics(df)[k] for k in ('累计收益%','最大回撤%')}
 
-p=ROOT/'verified_fusion_v9_results.json'
+p=ROOT/'history/verification/verified_fusion_v9_results.json'
 p.write_text(json.dumps(output,ensure_ascii=False,indent=2),encoding='utf-8')
 print('Saved',p)
 for label in inputs:

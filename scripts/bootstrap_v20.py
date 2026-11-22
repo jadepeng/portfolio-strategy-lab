@@ -7,9 +7,9 @@ ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
 import numpy as np
 import pandas as pd
 import json
-from v15.us_snapshot import load_us_prices,load_us_open
-from v14.market_snapshot import load_weekly
-from v20.integrated import run_advisory_us,run_cn_v20
+from history.v15.us_snapshot import load_us_prices,load_us_open
+from history.v14.market_snapshot import load_weekly
+from history.v20.integrated import run_advisory_us,run_cn_v20
 
 u,o=load_us_prices(),load_us_open()
 _,_,usbase,usguard=run_advisory_us(u,o)

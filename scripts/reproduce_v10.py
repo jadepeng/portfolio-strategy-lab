@@ -125,7 +125,7 @@ out['stress']={
   'estimated_one_week_portfolio_loss_percent':round(100*sum(q['target_'+a]*v for a,v in {'tech':-.10,'red':-.10,'bond':-.03,'gold':-.15,'money':.0002}.items()),2),
   'note':'hypothetical one-week shock applying end-of-period targets; excludes trade gaps/spreads'},
 }
-path=ROOT/'verified_fusion_v10_results.json'
+path=ROOT/'history/verification/verified_fusion_v10_results.json'
 path.write_text(json.dumps(out,ensure_ascii=False,indent=2),encoding='utf-8')
 print('Data',len(prices),'ETF weeks; baseline exact:',float(np.max(abs(raw_baseline.nav-bench.nav))))
 print('Bootstrap',out['bootstrap']); print('Current',out['current'])

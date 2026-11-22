@@ -5,11 +5,11 @@ import numpy as np
 import pandas as pd
 import pytest
 from history.strategies.fusion_v10 import TARGETS
-from v14.market_snapshot import load_weekly
-from v15.us_snapshot import load_us_prices,load_us_open
-from v18.integrated import build_us_v18,build_cn_v18_weekly,V18USConfig,V18CNConfig
-from v20.public_rules import V20Config,candidate_cn,candidate_us,blend_signals,advisory_gate_cn,advisory_gate_us
-from v20.integrated import run_cn_v20,run_us_v20,run_advisory_us
+from history.v14.market_snapshot import load_weekly
+from history.v15.us_snapshot import load_us_prices,load_us_open
+from history.v18.integrated import build_us_v18,build_cn_v18_weekly,V18USConfig,V18CNConfig
+from history.v20.public_rules import V20Config,candidate_cn,candidate_us,blend_signals,advisory_gate_cn,advisory_gate_us
+from history.v20.integrated import run_cn_v20,run_us_v20,run_advisory_us
 
 @lru_cache(1)
 def sources():

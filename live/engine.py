@@ -7,11 +7,11 @@ import pandas as pd
 from live.market import SYMBOLS, ZONES, RISK_SYMBOLS, validate_frame
 from live.backtest import run_bt_reference
 from live.store import clean_bool, clean_float
-from v18.integrated import build_cn_v18_weekly, build_us_v18
-from v20.integrated import run_advisory_cn, run_advisory_us, run_cn_v20, run_us_v20
-from v20.public_rules import V20Config
-from v21.analytics import describe, equity_curve, yearly, latest_weights, frozen_signal_record, verify_market_history
-from v22.intraday import StopConfig, IntradayStopEngine, normalize_bars, stop_line
+from strategy_core.portfolio import build_cn_v18_weekly, build_us_v18
+from strategy_core.advisory import run_advisory_cn, run_advisory_us, run_cn_v20, run_us_v20
+from strategy_core.public_rules import V20Config
+from strategy_core.analytics import describe, equity_curve, yearly, latest_weights, frozen_signal_record, verify_market_history
+from strategy_core.intraday import StopConfig, IntradayStopEngine, normalize_bars, stop_line
 
 
 def extract_cn_indicators(p: pd.DataFrame, sig_df: pd.DataFrame, market_tape: pd.DataFrame) -> dict:
@@ -153,8 +153,8 @@ def build_research_indicators(root) -> dict:
     """Compute baseline V18 indicators from offline verified snapshots for fallback use."""
     try:
         from pathlib import Path
-        from v14.market_snapshot import load_weekly
-        from v15.us_snapshot import load_us_prices, load_us_open
+        from strategy_core.market_snapshot import load_weekly
+        from strategy_core.us_snapshot import load_us_prices, load_us_open
 
         base_dir = Path(root)
         cn_path = base_dir / 'market_data' / 'verified_5asset_weekly_v13.csv'

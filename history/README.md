@@ -1,27 +1,26 @@
-# 历史策略与研究资料归档
+# 历史版本归档（只读研究快照）
 
-此目录统一保存**非当前默认交易入口的历史策略实现**；移动文件不改变交易参数、历史结果或实时决策规则。
+此目录存放不再作为当前在线交易执行入口的旧版模型和研究资料。
 
-- `strategies/`：原始双资产 `strategy_engine.py`、V3、V4 趋势动物与轮动引擎，以及 V5/V6/V7/V8/V9/V10/V11 融合策略和 V9 执行实验。
-- `reports/`：V4/V5 交易纪律、V5—V11 和 V13—V21 研究报告。
+- `strategies/`：V1—V11 的双资产、趋势动物、红利/科技轮动、五资产策略及执行实验；
+- `v13/`—`v22/`：V13–V22 原始版本模块，已统一修正**归档版本内部**的导入路径为 `history.vXX.*`；
+- `reports/`：V4–V22 各期研究报告；
+- `verification/`：根目录旧 `verified_*.json` 快照及价格数据解码工具；
+- `apps/`：原根目录的 Streamlit 研究应用及 `apps/pages/` 的 18 个历史页面，通过 `run_linux.sh` 或 `run_windows.bat` 启动。
 
-所有旧版实现从根目录移走（不保留根目录影子副本）；复现与当前模块的导入统一改为 `history.strategies.<module>`。例：
+## 核心原则
 
-```python
-from history.strategies.fusion_v10 import V10Config
-from history.strategies.fusion_v11 import V11Config
-```
+1. **历史版本之间只相互依赖历史版本**，并可引用 `history.strategies.*` 基类。它们不得回引 `strategy_core`。
+2. **线上执行代码禁止依赖 `history`**：当前模型实现位于 [`../strategy_core/`](../strategy_core/README.md)，其基础模块已复制成为独立的 `strategy_core.baselines`，不随历史文件而变。
+3. 旧版 Streamlit 入口与页面在 `apps/app.py`、`apps/pages/` 内一同保存，页面资源根路径相应调整，避免破坏多页面导航；历史复现工具继续保持在 `scripts/`，但导入 `history.vXX`；当前看板生成脚本和 `live/` 导入 `strategy_core`。
+4. `market_data/`、`research_outputs/` 目录保留原位，避免破坏历史复现与静态快照；根目录旧版本的验证 JSON 迁往 `history/verification/`。
 
-## 验证及历史复现
-
-在仓库根目录运行：
+## 验证
 
 ```bash
 python -m pytest tests -q
-python scripts/reproduce_v9.py
+python scripts/reproduce_v22.py
 python scripts/reproduce_v11.py
 ```
 
-**运行中依赖的边界**：现行 V18/V20 在线重算仍经 V13—V17 使用历史基类，因此 `v13/`—`v22/` 与 `live/` 保留原位（它们不是可直接卸载的死代码）；旧版 `pages/` 和 `scripts/` 保留入口以避免破坏已有使用方式。
-
-**数据边界**：`verified_*.json`、`market_data/`、`research_outputs/` 的路径均不更改，以保证历史复现文件检索和当前网页快照读取。归档不构成新的收益验证或盲测。
+归档只是结构拆分，不代表重新优化、验证策略收益或允许自动真实交易。

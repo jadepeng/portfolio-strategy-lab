@@ -43,5 +43,5 @@ def stat(f):
 out={'data':str(pfile.relative_to(ROOT)),'sha256':hashlib.sha256(pfile.read_bytes()).hexdigest(),'sample':len(p),'method':'retrospective, no untouched holdout; next-week close fills; same V10 trading fees', 'results':{k:stat(f) for k,f in runs.items()},'bootstrap':bootstrap(runs['V11 combined'],baseline),'latest':runs['V11 combined'][list(TARGETS)+['worst_window_vol','core_override','bond_signal_agreement','gold_signal_agreement']].iloc[-1].to_dict()}
 for name,st in out['results'].items():print(name,round(st['total'],2),round(st['mdd'],2),round(st['cagr'],2),round(st['positive_52w'],1),round(st['turnover'],1),{k:round(v,2) for k,v in st['calendar_return'].items()})
 print('latest',out['latest']);print('bootstrap',out['bootstrap'])
-(ROOT/'verified_fusion_v11_results.json').write_text(json.dumps(out,ensure_ascii=False,indent=2,default=lambda x:x.item()),encoding='utf-8')
+(ROOT/'history/verification/verified_fusion_v11_results.json').write_text(json.dumps(out,ensure_ascii=False,indent=2,default=lambda x:x.item()),encoding='utf-8')
 runs['V11 combined'].to_csv(ROOT/'market_data/v11_weekly_ledger.csv',index_label='week_start')

@@ -29,8 +29,8 @@ def clock():
 @pytest.fixture(scope='module')
 def historical_inputs():
     """Existing weekly observations recast as Friday fixtures, never live quotes."""
-    from v15.us_snapshot import load_us_prices, load_us_open
-    from v14.market_snapshot import load_weekly
+    from strategy_core.us_snapshot import load_us_prices, load_us_open
+    from strategy_core.market_snapshot import load_weekly
     cn = pd.read_csv(ROOT/'market_data'/'verified_5asset_weekly_v13.csv', parse_dates=['week_start']).set_index('week_start')
     us, op, tape = load_us_prices(), load_us_open(), load_weekly()
     daily = {}

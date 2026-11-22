@@ -3,10 +3,10 @@ from dataclasses import replace
 import numpy as np
 import pandas as pd
 import pytest
-from v16.overnight import (DailyGateConfig,classify_us_daily,close_available_cn,china_open_at,
+from history.v16.overnight import (DailyGateConfig,classify_us_daily,close_available_cn,china_open_at,
                            load_event_snapshot,align_events_to_cn_open)
-from v16.daily_replay import run_daily_replay,annual_stats
-from v13.daily_ohlc_2026 import load
+from history.v16.daily_replay import run_daily_replay,annual_stats
+from history.v13.daily_ohlc_2026 import load
 from history.strategies.fusion_v10 import TARGETS,V10Config
 
 @pytest.fixture(scope='module')

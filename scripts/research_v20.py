@@ -12,16 +12,16 @@ sys.path.insert(0,str(ROOT))
 import json
 import numpy as np
 import pandas as pd
-from v14.market_snapshot import load_weekly
-from v15.us_snapshot import load_us_prices,load_us_open
-from v20.integrated import run_cn_v20,run_us_v20
-from v20.public_rules import V20Config
+from history.v14.market_snapshot import load_weekly
+from history.v15.us_snapshot import load_us_prices,load_us_open
+from history.v20.integrated import run_cn_v20,run_us_v20
+from history.v20.public_rules import V20Config
 
 OUT=ROOT/'research_outputs';OUT.mkdir(exist_ok=True)
 prices=pd.read_csv(ROOT/'market_data'/'verified_5asset_weekly_v13.csv',parse_dates=['week_start']).set_index('week_start')
 market=load_weekly();us=load_us_prices();opens=load_us_open()
 
-from v20.metrics import metrics
+from history.v20.metrics import metrics
 
 rows=[]
 for frac in [0.,.25,.5,1.]:

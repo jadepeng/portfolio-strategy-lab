@@ -74,7 +74,7 @@ for label,prices,cash,windows in [('ETF',prices_etf,cash_etf,windows_etf),('INDE
       'confirm_signal':bool(df.v8_confirm_signal.iloc[-1])}
    report['current_target'][label]=report['results'][label][name]['latest']
 
-out=ROOT/'verified_fusion_v8_results.json'
+out=ROOT/'history/verification/verified_fusion_v8_results.json'
 out.write_text(json.dumps(report,indent=2,ensure_ascii=False),encoding='utf-8')
 print('Saved',out)
 for k,results in report['results'].items():

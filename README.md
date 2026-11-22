@@ -143,7 +143,8 @@ python -m pytest tests -q
 │   ├── ptms.css            # 现代化交易台样式、门控指示与响应式排版
 │   ├── v21.js              # 策略驾驶舱可视化图表组件
 │   └── v21.css             # 驾驶舱主样式
-├── history/                # 所有旧版策略实现与历史研究报告（兼容现行依赖）
+├── strategy_core/          # 可持续迭代的独立现行量化策略引擎（在线主程序只依赖这里）
+├── history/                # V1–V22 历史策略、研究报告、验证记录及旧版页面
 ├── tests/                  # 完备的单元测试与端到端回归套件
 ├── docs/                   # 详细接口、架构与历史技术方案
 ├── CHANGELOG.md            # 从 V1 到 V22 版本的详细演变历史
@@ -160,11 +161,17 @@ python -m pytest tests -q
 
 ---
 
-## 📚 旧版策略归档
+## 📚 现行策略与历史策略的边界
 
-历史策略实现（V1—V11 的轮动、趋势动物、V5—V11 融合和执行实验）统一放在 [history/strategies/](history/README.md)，V4—V21 研究报告放在 [history/reports/](history/README.md)。根目录不再保留旧版策略实现副本。
+- **现行研发入口：** [`strategy_core/`](strategy_core/README.md)。它持有独立的 A 股 / 美股策略、市场状态、盘中减仓、风控、行情分析及必要的基础模型副本。`live/` 和当前研究看板只导入 `strategy_core`，今后优化策略应修改这里，并保持接口测试通过。
+- **历史归档：** [`history/`](history/README.md) 保存 V1—V22 的研究源码（含 `history/v13/` 到 `history/v22/`）、研究报告、旧版应用及验证结果。历史回测脚本和历史研究页面继续依赖归档版本，避免被现行策略迭代改变结论。
+- **旧版 Streamlit：** `run_linux.sh` / `run_windows.bat` 仍可启动 `history/apps/app.py` 及其 `history/apps/pages/` 中的 18 个历史研究页面，但正式交易决策台请使用 `run_dashboard_linux.sh` / `run_dashboard_windows.bat`。
+- **验证数据：** 根目录原 `verified_*.json` 迁至 `history/verification/`，`market_data/` 与 `research_outputs/` 维持原路径。
 
-为了保证**现行 V18/V20 在线计算、V22 盘中风控、回测和 Streamlit 研究页**兼容，引用这些历史基类的代码统一采用 `history.strategies.*` 导入。仍被现行模型依赖的 `v13/`—`v22/`、`live/` 不迁移；复现脚本、研究页面与历史验证 JSON 保持原路径。详见 [history/README.md](history/README.md)。
+```bash
+python -m pytest tests -q
+python scripts/serve_dashboard.py
+```
 
 ## 📄 开源许可证
 

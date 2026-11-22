@@ -20,8 +20,8 @@ from live.store import (
     normalize_trade_date,
     risk_monitored_symbols,
 )
-from v22.allocation import clip_weekly_risk_additions
-from v22.intraday import IntradayStopEngine, StopConfig, normalize_bars, stop_line
+from strategy_core.allocation import clip_weekly_risk_additions
+from strategy_core.intraday import IntradayStopEngine, StopConfig, normalize_bars, stop_line
 
 
 def add_trading_sessions(day_str: str, sessions: int, market: str, clock=None) -> str:

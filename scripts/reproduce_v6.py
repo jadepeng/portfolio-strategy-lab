@@ -54,6 +54,6 @@ for name,(file,ix,freq) in sources.items():
     manifest['methods'][name]={'v6_base':asdict(c),'v6_overlay':asdict(model)}
     print(name,'V5',metrics(r_old)['累计收益%'],metrics(r_old)['最大回撤%'],
           'V6',metrics(r_new)['累计收益%'],metrics(r_new)['最大回撤%'])
-file=ROOT/'verified_fusion_v6_results.json';file.write_text(json.dumps(manifest,ensure_ascii=False,indent=2,
+file=ROOT/'history/verification/verified_fusion_v6_results.json';file.write_text(json.dumps(manifest,ensure_ascii=False,indent=2,
                      default=lambda x:x.item() if hasattr(x,'item') else x),encoding='utf-8')
 print('saved',file)

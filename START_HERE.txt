@@ -6,4 +6,4 @@ V22 中美双市场量化策略驾驶舱（历史研究与盘中风控模拟）
 5. 如需重算：安装 requirements.txt，依次运行 scripts/reproduce_v22.py、scripts/sensitivity_v22.py、scripts/build_v22_dashboard.py
 6. 如需编辑周频策略，请执行 python -m streamlit run app.py（Streamlit浏览器渲染尚未在本环境验收）
 7. 中美两策略账户独立。当前QQQ长期核心30%不会被V22减仓；红利候选止损线过近，请勿直接用于自动实盘
-8. 参见 V22_中美双市场盘中有效跌破减仓线研究报告.md
+8. 参见 history/reports/V22_中美双市场盘中有效跌破减仓线研究报告.md

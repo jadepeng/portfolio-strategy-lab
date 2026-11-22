@@ -12,7 +12,7 @@ import sys,argparse
 import pandas as pd
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-from v16.overnight import classify_us_daily,close_available_cn
+from history.v16.overnight import classify_us_daily,close_available_cn
 parser=argparse.ArgumentParser(description='V16: complete US daily bars to point-in-time risk events')
 parser.add_argument('--input',required=True,type=Path)
 parser.add_argument('--output',type=Path,default=ROOT/'market_data'/'us_daily_risk_latest.csv')

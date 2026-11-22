@@ -371,7 +371,7 @@ def test_review_twr_immune_to_large_cash_inflows_and_slippage(store):
 
 def test_ptms_http_endpoints_and_security(ptms_service, monkeypatch):
     import numpy as np
-    from v15.us_snapshot import load_us_open, load_us_prices
+    from strategy_core.us_snapshot import load_us_open, load_us_prices
 
     server = make_server(ptms_service, port=0)
 

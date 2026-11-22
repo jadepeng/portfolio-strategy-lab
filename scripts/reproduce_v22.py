@@ -14,8 +14,8 @@ from pathlib import Path
 import numpy as np,pandas as pd
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-from v13.daily_ohlc_2026 import load as load_cn_daily
-from v22.intraday import StopConfig,stop_line,normalize_bars,make_daily_lines,simulate_asset
+from history.v13.daily_ohlc_2026 import load as load_cn_daily
+from history.v22.intraday import StopConfig,stop_line,normalize_bars,make_daily_lines,simulate_asset
 
 def run(bars_path:Path,daily_path:Path):
     raw=pd.read_csv(bars_path)
