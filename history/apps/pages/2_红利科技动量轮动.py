@@ -9,7 +9,7 @@ import streamlit as st
 from history.strategies.rotation_engine import RotationParams,run_rotation_comparison,rotation_metrics,rotation_windows
 from history.strategies.strategy_engine import to_weekly
 
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=Path(__file__).resolve().parents[3]
 CACHE=ROOT/'market_data';CACHE.mkdir(exist_ok=True)
 st.set_page_config(page_title='红利科技｜动量轮动实验室',page_icon='🔄',layout='wide')
 st.title('红利 × 科技：动量轮动与极端行情风控')

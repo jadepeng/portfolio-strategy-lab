@@ -6,7 +6,7 @@ import sys
 import numpy as np
 import pandas as pd
 import streamlit as st
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
 from history.strategies.fusion_v10 import TARGETS,PRICES,results
 from history.v14.market_snapshot import load_weekly

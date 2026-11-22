@@ -3,7 +3,7 @@ from pathlib import Path
 import sys
 import pandas as pd
 import streamlit as st
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
 from history.v14.market_snapshot import load_weekly
 from history.v15.us_snapshot import load_us_prices,load_us_open

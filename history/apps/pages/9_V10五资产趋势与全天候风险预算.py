@@ -11,7 +11,7 @@ import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
 from history.strategies.fusion_v6 import V6Config, v6_base
 from history.strategies.fusion_v7 import V7Config, simulate_v7

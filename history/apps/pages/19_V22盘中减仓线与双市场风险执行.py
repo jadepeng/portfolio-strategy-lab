@@ -5,7 +5,7 @@ import json
 import streamlit as st
 import pandas as pd
 
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=Path(__file__).resolve().parents[3]
 RESULTS=ROOT/'research_outputs'/'V22_intraday_research_snapshot.json'
 st.set_page_config(page_title='V22盘中减仓线',layout='wide')
 st.title('V22｜盘中有效跌破与分级减仓')

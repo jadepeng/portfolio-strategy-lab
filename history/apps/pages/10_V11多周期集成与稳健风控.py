@@ -3,7 +3,7 @@ from dataclasses import replace
 import sys
 import pandas as pd
 import streamlit as st
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=Path(__file__).resolve().parents[3]
 sys.path.insert(0,str(ROOT))
 from history.strategies.fusion_v6 import V6Config,v6_base
 from history.strategies.fusion_v7 import V7Config

@@ -112,3 +112,14 @@ def test_current_execution_contract_exports_are_available():
 
     assert all((V18CNConfig, build_cn_v18_weekly, build_us_v18, run_cn_v20,
                 run_us_v20, V20Config, IntradayStopEngine, clip_weekly_risk_additions))
+
+def test_legacy_streamlit_pages_archived_for_multipage_navigation():
+    assert not (ROOT / "pages").exists()
+    assert not (ROOT / "app.py").exists()
+    assert (ROOT / "history" / "apps" / "app.py").is_file()
+    pages = list((ROOT / "history" / "apps" / "pages").glob("*.py"))
+    assert len(pages) == 18
+    for path in pages:
+        source = path.read_text(encoding="utf-8")
+        assert "Path(__file__).resolve().parents[1]" not in source
+        ast.parse(source, filename=str(path))

@@ -3,7 +3,7 @@ from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
 
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=Path(__file__).resolve().parents[3]
 FILE=ROOT/'web'/'V21_策略研究驾驶舱.html'
 st.set_page_config(page_title='V21 中美双市场策略驾驶舱',layout='wide')
 st.title('V21 · 中美双市场策略驾驶舱')

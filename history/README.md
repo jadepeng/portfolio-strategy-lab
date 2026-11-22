@@ -6,13 +6,13 @@
 - `v13/`—`v22/`：V13–V22 原始版本模块，已统一修正**归档版本内部**的导入路径为 `history.vXX.*`；
 - `reports/`：V4–V22 各期研究报告；
 - `verification/`：根目录旧 `verified_*.json` 快照及价格数据解码工具；
-- `apps/`：原根目录的 Streamlit 研究应用，通过 `run_linux.sh` 或 `run_windows.bat` 启动。
+- `apps/`：原根目录的 Streamlit 研究应用及 `apps/pages/` 的 18 个历史页面，通过 `run_linux.sh` 或 `run_windows.bat` 启动。
 
 ## 核心原则
 
 1. **历史版本之间只相互依赖历史版本**，并可引用 `history.strategies.*` 基类。它们不得回引 `strategy_core`。
 2. **线上执行代码禁止依赖 `history`**：当前模型实现位于 [`../strategy_core/`](../strategy_core/README.md)，其基础模块已复制成为独立的 `strategy_core.baselines`，不随历史文件而变。
-3. 历史复现工具继续保持在 `scripts/`，但导入 `history.vXX`；当前看板生成脚本和 `live/` 导入 `strategy_core`。
+3. 旧版 Streamlit 入口与页面在 `apps/app.py`、`apps/pages/` 内一同保存，页面资源根路径相应调整，避免破坏多页面导航；历史复现工具继续保持在 `scripts/`，但导入 `history.vXX`；当前看板生成脚本和 `live/` 导入 `strategy_core`。
 4. `market_data/`、`research_outputs/` 目录保留原位，避免破坏历史复现与静态快照；根目录旧版本的验证 JSON 迁往 `history/verification/`。
 
 ## 验证

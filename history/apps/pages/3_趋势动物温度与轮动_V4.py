@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
 from history.strategies.trend_animal_v4 import TrendAnimalV4Config,backtest_v4,get_stage_snapshot,STAGES
 from history.strategies.v3_engine import V3Config,run_v3,metrics
