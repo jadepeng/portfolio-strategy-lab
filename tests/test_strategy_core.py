@@ -123,3 +123,10 @@ def test_legacy_streamlit_pages_archived_for_multipage_navigation():
         source = path.read_text(encoding="utf-8")
         assert "Path(__file__).resolve().parents[1]" not in source
         ast.parse(source, filename=str(path))
+
+def test_dashboard_builder_keeps_web_asset_filenames():
+    builder = (ROOT / "scripts" / "build_v22_dashboard.py").read_text(encoding="utf-8")
+    for filename in ("v21.css", "v21.js"):
+        assert (ROOT / "web" / filename).is_file()
+        assert repr(filename) in builder
+    assert "history.v21." not in builder

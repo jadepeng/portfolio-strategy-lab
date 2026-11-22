@@ -25,8 +25,8 @@ for x in guard['samples']:
 base['intraday']['traces']=traces
 (OUT/'V22_dashboard_snapshot.json').write_text(json.dumps(base,ensure_ascii=False,separators=(',',':'),allow_nan=False),encoding='utf-8')
 text=(ROOT/'web'/'template.html').read_text(encoding='utf-8')
-css=(ROOT/'web'/'history.v21.css').read_text(encoding='utf-8')
-js=(ROOT/'web'/'history.v21.js').read_text(encoding='utf-8')
+css=(ROOT/'web'/'v21.css').read_text(encoding='utf-8')
+js=(ROOT/'web'/'v21.js').read_text(encoding='utf-8')
 contents=json.dumps(base,ensure_ascii=False,separators=(',',':'),allow_nan=False).replace('</','<\\/')
 text=text.replace('/* V21_STYLES */',css).replace('/* V21_CODE */',js).replace('V21_DATA_JSON',contents)
 if any(k in text for k in ('V21_DATA_JSON','/* V21_CODE */','/* V21_STYLES */')):raise RuntimeError('unresolved dashboard assets')
