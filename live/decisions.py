@@ -8,7 +8,7 @@ from typing import Any
 
 import pandas as pd
 
-from live.market import ZONES, validate_frame
+from live.market import ZONES, utc_now, validate_frame
 from live.store import (
     INSTRUMENT_META,
     TradingStore,
@@ -689,6 +689,117 @@ def generate_order_lines(
     return orders, round(max(0.0, available_cash), 2), round(total_fee, 2)
 
 
+def compute_execution_window(
+    market: str,
+    signal_cutoff: str | None,
+    clock=None,
+    now: pd.Timestamp | None = None,
+) -> dict[str, Any]:
+    """Compute the earliest valid execution date/window after signal_cutoff."""
+    now_ts = pd.Timestamp(now) if now is not None else utc_now()
+    if now_ts.tzinfo is None:
+        now_ts = now_ts.tz_localize('UTC')
+    today_str = market_today(market, now_ts)
+    if not signal_cutoff:
+        return {
+            'today_local_date': today_str,
+            'earliest_execution_date': None,
+            'window_open': False,
+            'window_label': '暂无有效信号截点',
+        }
+    earliest = add_trading_sessions(str(signal_cutoff), 1, market, clock)
+    local_now = now_ts.tz_convert(ZONES[market])
+    window_open = (str(today_str) > str(earliest)) or (
+        str(today_str) == str(earliest) and (local_now.hour, local_now.minute) >= (9, 30)
+    )
+    if market == 'CN':
+        label = f'{earliest} 09:30 A股开盘起（周频基准为下周收盘）'
+    else:
+        label = f'{earliest} 09:30 美股开盘起 (美东时间)'
+    return {
+        'today_local_date': today_str,
+        'earliest_execution_date': earliest,
+        'window_open': window_open,
+        'window_label': label,
+    }
+
+
+def evaluate_account_data_gate(
+    account: dict[str, Any],
+    weekly_model: dict[str, Any] | None,
+    strategy_status_entry: dict[str, Any] | None,
+    quotes_map: dict[str, dict[str, Any]] | None,
+    clock,
+    now: pd.Timestamp,
+    *,
+    market_status_entry: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Evaluate independently per market whether data supports executing the plan."""
+    market = account['market']
+    model = weekly_model or {}
+    origin = str(model.get('origin') or 'frozen_research_snapshot')
+    cutoff = str(model.get('cutoff') or '')
+    st_entry = strategy_status_entry or {}
+    st_state = str(st_entry.get('state') or 'unavailable')
+    st_msg = str(st_entry.get('message') or '')
+    mkt_status = market_status_entry or clock.status(market, now)
+    cal_state = str(mkt_status.get('state') or 'calendar_unverified')
+
+    reasons: list[str] = []
+    if origin != 'online_recomputed_simulation':
+        reasons.append(st_msg or f'{market} 策略尚未完成在线重算（当前仅离线研究基线）')
+    elif st_state == 'unavailable':
+        reasons.append(st_msg or f'{market} 策略重算不可用')
+    elif st_state == 'stale':
+        reasons.append(st_msg or f'{market} 周线数据已过期，未覆盖最新完整交易周')
+    elif st_state == 'unverified' or cal_state == 'calendar_unverified':
+        reasons.append(st_msg or f'{market} 交易日历未核验，不能确认完整交易周与执行窗口')
+    elif st_entry.get('connection_degraded'):
+        reasons.append('行情服务处于降级或重启缓存状态，暂不按自动计划执行，请刷新确认后再处理')
+
+    # Verify fresh live quotes for all required assets in this market
+    q_map = quotes_map or {}
+    for sym in market_symbols(market):
+        q = q_map.get(sym)
+        if not q or q.get('price') is None or q.get('source') in ('research_close', 'daily_raw'):
+            reasons.append(f'{INSTRUMENT_META[sym]["name"]}({sym}) 缺少实时/收盘报价')
+        elif q.get('refresh_failed'):
+            reasons.append(f'{INSTRUMENT_META[sym]["name"]}({sym}) 行情刷新失败，报价可能过期')
+        elif cal_state == 'open' and q.get('stale'):
+            reasons.append(f'{INSTRUMENT_META[sym]["name"]}({sym}) 盘中报价已过期（超过3分钟未更新）')
+
+    win = compute_execution_window(market, cutoff or None, clock, now)
+    if reasons:
+        status = 'BLOCKED'
+        can_execute_plan = False
+        actionable = False
+    elif not win['window_open']:
+        status = 'WAIT_WINDOW'
+        can_execute_plan = False
+        actionable = False
+        reasons.append(f'周频信号形成于 {cutoff} 收盘，须等待 {win["window_label"]} 方可执行')
+    else:
+        status = 'READY'
+        can_execute_plan = True
+        actionable = True
+
+    return {
+        'status': status,
+        'actionable': actionable,
+        'can_execute_plan': can_execute_plan,
+        'reasons': reasons,
+        'signal_cutoff': cutoff or None,
+        'signal_origin': origin,
+        'signal_time_label': f'{cutoff} 收盘后' if cutoff else '暂无',
+        'earliest_execution_date': win['earliest_execution_date'],
+        'earliest_execution_window': win['window_label'],
+        'window_open': win['window_open'],
+        'market_state': cal_state,
+        'market_state_label': str(mkt_status.get('label') or cal_state),
+        'strategy_state': st_state,
+    }
+
+
 def build_rebalance_plan(
     account: dict[str, Any],
     portfolio: dict[str, Any],
@@ -696,6 +807,8 @@ def build_rebalance_plan(
     stop_states: dict[str, dict[str, Any]],
     today_local_date: str,
     pending_tickets: list[dict[str, Any]] | None = None,
+    *,
+    data_gate: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Arbitrate weekly V18 target against persistent V22 intraday stops & cooldowns."""
     market = account['market']
@@ -760,21 +873,34 @@ def build_rebalance_plan(
         priority_exit = bool(current_for_clip.get('qqq', 0.0) - effective_target.get('qqq', 0.0) > 0.04 + 1e-9)
 
     pending_intraday = [
-        t for t in (pending_tickets or []) if t.get('source') == 'INTRADAY_STOP' and t.get('status') == 'PENDING'
+        t
+        for t in (pending_tickets or [])
+        if t.get('source') == 'INTRADAY_STOP' and t.get('status') in ('PENDING', 'PARTIAL')
     ]
     orders, projected_cash, total_est_fee = generate_order_lines(account, portfolio, effective_target)
 
     deadband = float(account['rebalance_deadband'])
-    if pending_intraday:
+    gate_status = (data_gate or {}).get('status', 'READY')
+    gate_reasons = (data_gate or {}).get('reasons') or []
+
+    if gate_status == 'BLOCKED':
+        verdict = 'DATA_BLOCKED'
+        verdict_label = '数据暂不完整，暂停按计划操作'
+        verdict_reason = '；'.join(gate_reasons) if gate_reasons else '行情或策略数据尚未就绪，暂不生成可执行计划；仍可手动补录已发生交易。'
+    elif not portfolio['initialized'] or portfolio['total_equity'] <= 1e-6:
+        verdict = 'NEEDS_INIT'
+        verdict_label = '待初始化账户持仓'
+        verdict_reason = '先录入当前账户现金与已有持仓，系统即可生成精确到股数的调仓建议'
+    elif pending_intraday:
         verdict = 'ACTION_INTRADAY_STOP'
         verdict_label = '盘中破位防守优先'
         verdict_reason = (
             f'有 {len(pending_intraday)} 笔盘中防守减仓单待确认，优先降低风险敞口，暂缓本周风险加仓'
         )
-    elif not portfolio['initialized'] or portfolio['total_equity'] <= 1e-6:
-        verdict = 'NEEDS_INIT'
-        verdict_label = '待初始化账户持仓'
-        verdict_reason = '先录入当前账户现金与已有持仓，系统即可生成精确到股数的调仓建议'
+    elif gate_status == 'WAIT_WINDOW':
+        verdict = 'WAIT_EXECUTION_WINDOW'
+        verdict_label = '信号已生成，等待执行窗口'
+        verdict_reason = '；'.join(gate_reasons) if gate_reasons else '尚未到达最早可执行交易窗口，请于开盘后处理'
     elif priority_exit and orders:
         verdict = 'ACTION_PRIORITY_EXIT'
         verdict_label = '风控优先减仓'
@@ -792,7 +918,11 @@ def build_rebalance_plan(
             else '当前持仓已贴近目标，差额不足最小交易单位，无需操作'
         )
 
-    should_execute = verdict in ('ACTION_INTRADAY_STOP', 'ACTION_PRIORITY_EXIT', 'ACTION_REBALANCE')
+    can_execute_plan = (data_gate.get('can_execute_plan', True) if data_gate else True) and portfolio['initialized'] and portfolio['total_equity'] > 1e-6
+    should_execute = bool(
+        can_execute_plan
+        and verdict in ('ACTION_INTRADAY_STOP', 'ACTION_PRIORITY_EXIT', 'ACTION_REBALANCE')
+    )
 
     weights_comparison: list[dict[str, Any]] = []
     pos_by_sym = {p['symbol']: p for p in portfolio['positions']}
@@ -846,6 +976,8 @@ def build_rebalance_plan(
         'verdict_label': verdict_label,
         'verdict_reason': verdict_reason,
         'should_execute': should_execute,
+        'can_execute_plan': can_execute_plan,
+        'data_gate': data_gate,
         'turnover': round(turnover, 5),
         'deadband': deadband,
         'priority_exit': priority_exit,
@@ -885,8 +1017,9 @@ def execute_decision_ticket(
     fills: list[dict[str, Any]],
     discipline_tag: str = 'FOLLOW',
     review_note: str = '',
-    status: str = 'EXECUTED',
+    status: str | None = None,
     ignore_t_plus: bool = False,
+    client_request_id: str | None = None,
     clock=None,
 ) -> dict[str, Any]:
     """Commit fills for a decision ticket and advance stop/cooldown state machines."""
@@ -906,7 +1039,14 @@ def execute_decision_ticket(
         status=status,
         ignore_t_plus=ignore_t_plus,
         today_local_date=td,
+        client_request_id=client_request_id,
     )
+
+    if resolved.get('duplicate'):
+        return {
+            **resolved,
+            'stop_states': store.get_stop_states(account_id),
+        }
 
     monitored = set(risk_monitored_symbols(market))
     stop_states = store.get_stop_states(account_id)

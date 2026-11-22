@@ -15,11 +15,14 @@ import pandas as pd
 from live.decisions import (
     build_rebalance_plan,
     create_weekly_decision_ticket,
+    evaluate_account_data_gate,
     execute_decision_ticket,
     sync_account_intraday_stops,
 )
 from live.engine import build_research_indicators, monitor, recompute
+from live.importer import commit_broker_csv, preview_broker_csv
 from live.market import MarketClock, RISK_SYMBOLS, SYMBOLS, utc_now
+from live.notifications import evaluate_and_emit_notifications
 from live.review import build_review_report, render_review_markdown
 from live.store import INSTRUMENT_META, TradingStore, clean_float, market_today, now_iso
 
@@ -88,7 +91,7 @@ class LiveService:
                 quote['display_state'] = 'last_close'
         # A cache read or an API poll never refreshes the source's data timestamp.
         for market, value in live.get('strategy_status', {}).items():
-            if status['cache_restored'] or (status['errors'] and status['state'] in ('degraded', 'offline')):
+            if self._market_connection_degraded(market, status):
                 value['connection_degraded'] = True
         for symbol, observation in live.get('intraday', {}).items():
             age = (now-pd.Timestamp(observation['last_bar_end'])).total_seconds()
@@ -170,6 +173,10 @@ class LiveService:
                     temp = self.cache.with_suffix('.tmp')
                     temp.write_bytes(content)
                     os.replace(temp, self.cache)
+            try:
+                self.ptms_state()
+            except Exception:
+                pass
             return True
         except Exception as error:
             with self.lock:
@@ -219,6 +226,7 @@ class LiveService:
                     prices[sym] = {'price': px, 'source': 'daily_raw', 'timestamp': str(raw_df.index[-1]), 'stale': True}
         with self.lock:
             quotes = deepcopy(self.live.get('quotes', {}))
+            errors = dict(self.status.get('errors') or {})
         for sym, q in quotes.items():
             px = clean_float(q.get('price'))
             if px and px > 0:
@@ -229,8 +237,23 @@ class LiveService:
                     'source': str(q.get('source') or 'quote'),
                     'timestamp': ts_raw,
                     'stale': age > 180,
+                    'refresh_failed': any(k in errors for k in ('quotes', f'quote:{sym}')),
                 }
         return prices
+
+    def _market_connection_degraded(self, market, status):
+        if status.get('cache_restored') or status.get('state') == 'offline':
+            return True
+        for err_key in status.get('errors') or {}:
+            if err_key in ('quotes', 'history', 'refresh'):
+                return True
+            if err_key == 'tape' and market == 'CN':
+                return True
+            if err_key.startswith(('quote:', 'daily:')):
+                sym = err_key.split(':', 1)[1]
+                if INSTRUMENT_META.get(sym, {}).get('market', market) == market:
+                    return True
+        return False
 
     def _select_weekly_model(self, market, strategy_version):
         with self.lock:
@@ -328,6 +351,13 @@ class LiveService:
 
     def ptms_state(self):
         now_ts = utc_now()
+        with self.lock:
+            status = deepcopy(self.status)
+            strategy_status = deepcopy(self.live.get('strategy_status') or {})
+        for market in ('CN', 'US'):
+            if market in strategy_status and self._market_connection_degraded(market, status):
+                strategy_status[market]['connection_degraded'] = True
+        market_status = {m: self.clock.status(m, now_ts) for m in ('CN', 'US')}
         prices = self._current_prices_map(now_ts)
         indicators = self._indicators_with_fallback()
         accounts_out = {}
@@ -338,9 +368,26 @@ class LiveService:
             portfolio = self.store.get_portfolio(aid, prices, today_local_date=today_str)
             stop_states = self._account_stop_view(account, portfolio, prices, now_ts)
             tickets = self.store.list_tickets(aid, limit=50)
-            pending = [t for t in tickets if t['status'] == 'PENDING']
+            pending = [t for t in tickets if t['status'] in ('PENDING', 'PARTIAL')]
             weekly_model = self._select_weekly_model(market, account['strategy_version'])
-            plan = build_rebalance_plan(account, portfolio, weekly_model, stop_states, today_str, pending)
+            data_gate = evaluate_account_data_gate(
+                account,
+                weekly_model,
+                strategy_status.get(market),
+                prices,
+                self.clock,
+                now_ts,
+                market_status_entry=market_status[market],
+            )
+            plan = build_rebalance_plan(
+                account,
+                portfolio,
+                weekly_model,
+                stop_states,
+                today_str,
+                pending,
+                data_gate=data_gate,
+            )
             events = self.store.list_events(aid, limit=150)
             accounts_out[aid] = {
                 'account': account,
@@ -350,14 +397,25 @@ class LiveService:
                 'tickets': tickets,
                 'events': events,
             }
-        return {
+        out = {
             'schema': 1,
             'server_time': now_ts.isoformat(),
+            'status': status,
+            'market_status': market_status,
             'accounts': accounts_out,
             'indicators': indicators,
             'quotes': prices,
             'instrument_meta': INSTRUMENT_META,
         }
+        try:
+            evaluate_and_emit_notifications(self.store, out, live_status=status)
+        except Exception:
+            pass
+        notifications = self.store.list_notifications(limit=50)
+        unread_count = len(self.store.list_notifications(limit=200, unread_only=True))
+        out['notifications'] = notifications
+        out['unread_notifications'] = unread_count
+        return out
 
     def ptms_review(self, account_id='CN_MAIN'):
         now_ts = utc_now()
@@ -387,6 +445,7 @@ class LiveService:
                 strategy_version=body.get('strategy_version'),
                 rebalance_deadband=body.get('rebalance_deadband'),
                 core_floors=body.get('core_floors'),
+                account_mode=body.get('account_mode'),
             )
             return {'account': acc, 'state': self.ptms_state()}
 
@@ -401,6 +460,7 @@ class LiveService:
                 cash=body.get('cash', 0.0),
                 positions=body.get('positions') or [],
                 note=str(body.get('note') or '账户初始化建账'),
+                account_mode=body.get('account_mode'),
             )
             return {'result': res, 'state': self.ptms_state()}
 
@@ -424,8 +484,25 @@ class LiveService:
                 note=str(body.get('note') or ''),
                 ignore_t_plus=bool(body.get('ignore_t_plus', False)),
                 today_local_date=market_today(acc['market'], now_ts),
+                client_request_id=body.get('client_request_id'),
+                external_trade_id=body.get('external_trade_id'),
             )
             return {'event': ev, 'state': self.ptms_state()}
+
+        if path == '/api/ptms/ledger/reverse':
+            aid = str(body.get('account_id') or '')
+            eid = int(body.get('event_id'))
+            acc = self.store.get_account(aid)
+            td = str(body.get('trade_date') or market_today(acc['market'], now_ts))
+            rev = self.store.reverse_event(
+                aid,
+                eid,
+                reason=str(body.get('reason') or ''),
+                trade_date=td,
+                event_time=body.get('event_time'),
+                today_local_date=market_today(acc['market'], now_ts),
+            )
+            return {'reversal': rev, 'state': self.ptms_state()}
 
         if path == '/api/ptms/ledger/reconcile':
             aid = str(body.get('account_id') or '')
@@ -449,7 +526,13 @@ class LiveService:
             st = self.ptms_state()
             if aid not in st['accounts']:
                 raise KeyError(f'账户不存在: {aid}')
-            plan = body.get('snapshot') or st['accounts'][aid]['plan']
+            live_plan = st['accounts'][aid]['plan']
+            if not live_plan.get('can_execute_plan') and not body.get('allow_override'):
+                reasons = (live_plan.get('data_gate') or {}).get('reasons') or [
+                    live_plan.get('verdict_reason') or '当前数据或执行窗口未就绪'
+                ]
+                raise ValueError('当前不允许锁定计划调仓单：' + '；'.join(reasons))
+            plan = body.get('snapshot') or live_plan
             ticket = create_weekly_decision_ticket(
                 self.store,
                 plan,
@@ -471,8 +554,9 @@ class LiveService:
                 fills=body.get('fills') or [],
                 discipline_tag=str(body.get('discipline_tag') or 'FOLLOW'),
                 review_note=str(body.get('review_note') or ''),
-                status=str(body.get('status') or 'EXECUTED'),
+                status=body.get('status'),
                 ignore_t_plus=bool(body.get('ignore_t_plus', False)),
+                client_request_id=body.get('client_request_id'),
                 clock=self.clock,
             )
             return {'result': res, 'state': self.ptms_state()}
@@ -487,6 +571,63 @@ class LiveService:
                 review_note=str(body.get('review_note') or ''),
             )
             return {'ticket': ticket, 'state': self.ptms_state()}
+
+        if path == '/api/ptms/decisions/cancel-remainder':
+            aid = str(body.get('account_id') or '')
+            did = int(body.get('decision_id'))
+            ticket = self.store.cancel_ticket_remainder(
+                aid,
+                did,
+                review_note=str(body.get('review_note') or ''),
+            )
+            return {'ticket': ticket, 'state': self.ptms_state()}
+
+        if path == '/api/ptms/restore/preview':
+            backup_obj = body.get('backup') if 'backup' in body else body
+            return {'preview': self.store.preview_full_backup(backup_obj)}
+
+        if path == '/api/ptms/restore':
+            backup_obj = body.get('backup') if 'backup' in body else body
+            res = self.store.restore_full_backup(backup_obj)
+            return {'result': res, 'state': self.ptms_state()}
+
+        if path == '/api/ptms/import/preview':
+            aid = str(body.get('account_id') or '')
+            acc = self.store.get_account(aid)
+            csv_text = str(body.get('csv_text') or '')
+            prices = self._current_prices_map(now_ts)
+            preview = preview_broker_csv(
+                self.store,
+                aid,
+                csv_text,
+                prices=prices,
+                today_local_date=market_today(acc['market'], now_ts),
+            )
+            return {'preview': preview}
+
+        if path == '/api/ptms/import/commit':
+            aid = str(body.get('account_id') or '')
+            acc = self.store.get_account(aid)
+            csv_text = str(body.get('csv_text') or '')
+            res = commit_broker_csv(
+                self.store,
+                aid,
+                csv_text,
+                ignore_t_plus=bool(body.get('ignore_t_plus', True)),
+                today_local_date=market_today(acc['market'], now_ts),
+            )
+            return {'result': res, 'state': self.ptms_state()}
+
+        if path == '/api/ptms/notifications/read':
+            raw_ids = body.get('notification_ids')
+            count = self.store.mark_notifications_read(raw_ids)
+            notifications = self.store.list_notifications(limit=50)
+            unread_count = len(self.store.list_notifications(limit=200, unread_only=True))
+            return {
+                'updated': count,
+                'notifications': notifications,
+                'unread_notifications': unread_count,
+            }
 
         if path == '/api/ptms/stops/reset':
             aid = str(body.get('account_id') or '')
@@ -523,6 +664,13 @@ def make_server(service, host='127.0.0.1', port=8765):
         raise ValueError('dashboard service binds to localhost only')
 
     MAX_POST_BYTES = 262144
+    LARGE_POST_BYTES = 2097152
+    LARGE_POST_PATHS = {
+        '/api/ptms/restore',
+        '/api/ptms/restore/preview',
+        '/api/ptms/import/preview',
+        '/api/ptms/import/commit',
+    }
     ASSET_TYPES = {
         '/assets/ptms.css': ('ptms.css', 'text/css; charset=utf-8'),
         '/assets/ptms.js': ('ptms.js', 'application/javascript; charset=utf-8'),
@@ -561,7 +709,7 @@ def make_server(service, host='127.0.0.1', port=8765):
             allowed = {f'{h}:{self.server.server_port}' for h in ('localhost', '127.0.0.1')}
             return self.headers.get('Host', '') in allowed
 
-        def _read_json_body(self):
+        def _read_json_body(self, max_bytes=MAX_POST_BYTES):
             if self.headers.get('Transfer-Encoding'):
                 raise ValueError('chunked encoding not supported')
             raw_len = self.headers.get('Content-Length', '0')
@@ -569,7 +717,7 @@ def make_server(service, host='127.0.0.1', port=8765):
                 length = int(raw_len)
             except ValueError as exc:
                 raise ValueError('invalid Content-Length') from exc
-            if length < 0 or length > MAX_POST_BYTES:
+            if length < 0 or length > max_bytes:
                 raise ValueError('request body too large')
             raw = self.rfile.read(length) if length > 0 else b'{}'
             data = json.loads(raw.decode('utf-8'))
@@ -599,6 +747,24 @@ def make_server(service, host='127.0.0.1', port=8765):
                 return self.send_content(200, json_bytes(payload))
             if path == '/api/ptms/state':
                 return self.send_content(200, json_bytes(service.ptms_state()))
+            if path == '/api/ptms/notifications':
+                qs = parse_qs(parsed.query)
+                unread_only = (qs.get('unread_only') or ['0'])[0] in ('1', 'true', 'yes')
+                try:
+                    limit = int((qs.get('limit') or ['50'])[0])
+                except (TypeError, ValueError):
+                    limit = 50
+                notes = service.store.list_notifications(limit=limit, unread_only=unread_only)
+                unread_count = len(service.store.list_notifications(limit=200, unread_only=True))
+                return self.send_content(200, json_bytes({'notifications': notes, 'unread_notifications': unread_count}))
+            if path == '/api/ptms/backup':
+                backup = service.store.export_full_backup()
+                return self.send_content(
+                    200,
+                    json_bytes(backup),
+                    'application/json; charset=utf-8',
+                    {'Content-Disposition': 'attachment; filename="ptms_full_backup.json"'},
+                )
             if path == '/api/ptms/review':
                 qs = parse_qs(parsed.query)
                 aid = (qs.get('account_id') or ['CN_MAIN'])[0]
@@ -620,7 +786,7 @@ def make_server(service, host='127.0.0.1', port=8765):
                         'exported_at': now_iso(),
                         'account': acc,
                         'review': review,
-                        'events': service.store.list_events(aid, limit=1000),
+                        'events': service.store.list_events(aid, limit=None),
                     }
                     return self.send_content(
                         200,
@@ -651,7 +817,8 @@ def make_server(service, host='127.0.0.1', port=8765):
                 return self.send_content(202, json_bytes({'accepted': accepted, 'message': '刷新已排队' if accepted else '刷新正在进行'}))
             if path.startswith('/api/ptms/'):
                 try:
-                    body = self._read_json_body()
+                    max_b = LARGE_POST_BYTES if path in LARGE_POST_PATHS else MAX_POST_BYTES
+                    body = self._read_json_body(max_bytes=max_b)
                     res = service.handle_ptms_post(path, body)
                     return self.send_content(200, json_bytes(res))
                 except KeyError as error:

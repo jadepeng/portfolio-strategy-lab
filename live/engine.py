@@ -187,15 +187,21 @@ def weekly_prices(daily, market, clock, now):
         dates.append(str(frame.index[-1].date()))
     if len(set(dates)) != 1:
         raise ValueError('资产末日不一致，拒绝混合过期价格')
-    p, op = pd.DataFrame(closes), pd.DataFrame(opens)
     start = max(s.first_valid_index() for s in closes.values())
-    p, op = p.loc[start:], op.loc[start:]
-    if p.isna().any().any() or op.isna().any().any():
-        raise ValueError('资产日线缺失，未填充虚构价格')
-    labels = p.index.to_period('W-SUN').start_time
-    p, op = p.groupby(labels).last(), op.groupby(labels).first()
+    weekly_closes, weekly_opens = {}, {}
+    for key in closes:
+        c = closes[key].loc[start:]
+        o = opens[key].loc[start:]
+        if c.isna().any() or o.isna().any():
+            raise ValueError('资产日线存在无效空值，未填充虚构价格')
+        labels = c.index.to_period('W-SUN').start_time
+        weekly_closes[key] = c.groupby(labels).last()
+        weekly_opens[key] = o.groupby(labels).first()
+    p, op = pd.DataFrame(weekly_closes), pd.DataFrame(weekly_opens)
     keep = [clock.week_complete(t, market, now) for t in p.index]
     p, op = p.loc[keep], op.loc[keep]
+    if p.isna().any().any() or op.isna().any().any():
+        raise ValueError('资产周线缺失，未填充虚构价格')
     p.index.name = op.index.name = 'week_start'
     verify_market_history(p, label=market)
     cutoff = max(f.index[f.index.to_period('W-SUN').start_time == p.index[-1]][-1] for f in completed.values())

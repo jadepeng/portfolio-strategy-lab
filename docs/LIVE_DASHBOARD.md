@@ -62,13 +62,19 @@ SDK只创建 QuoteContext；不创建交易上下文。凭据仅由服务器进�
 
 本地驾驶舱已从只读研究面板升级为双账户个人交易管理系统，新增 4 个交易视图（决策与调仓台、持仓与账本、策略指标雷达、交易复盘中心）：
 
-- **持久化账本与风控状态**：所有资金流水、买卖成交、对账校准、决策票据、V22 盘中移动止损与冷却锁及周/日复盘笔记均保存于 `market_data/personal_trading.db`（SQLite WAL 模式，随 `market_data/` 默认被 `.gitignore` 忽略）。
+- **持久化账本与风控状态**：所有资金流水、买卖成交、冲正记录、对账校准、决策票据、V22 盘中移动止损与冷却锁、周/日复盘笔记与去重通知均保存于 `market_data/personal_trading.db`（SQLite WAL 模式，随 `market_data/` 默认被 `.gitignore` 忽略）。区分 `REAL`（实盘账户）与 `DEMO`（示例账户），实盘建账不预填虚假现金或 `1.0` 成本价。
+- **独立执行门控与窗口检查**：按市场独立评估 `data_gate`（就绪 / 等待执行窗口 / 数据拦截），展示信号形成时间、最早可执行窗口与拦截原因；数据过期、交易日历未核验或未到执行窗口时禁止生成/确认计划调仓单，仅保留「手动记一笔」补录已发生成交。A 股降级不影响美股账户独立运行。
+- **部分成交、幂等去重与不可变冲正**：支持分批录入实际数量、均价与费用，未成交余量保持 `PARTIAL` 待办并可继续补录或取消余量（`EXPIRED`）；通过 `client_request_id` 与 `external_trade_id` 防止重复入账；支持 `reverse_event` 反向冲正流水并自动重算关联票据进度。复盘区严格区分「计划完成率」与「纪律遵守率」。
 - **周频与日内非对称仲裁**：周频 V18 负责攻防再平衡，日内 V22 30 分钟完整 K 线仅负责有效跌破分级减仓并触发 3 个交易日冷却期；冷却期内周频加仓自动拦截并转入现金管理资产（`511880.SH` / `BIL.US`）。A 股 ETF 自动遵循 100 股整数手与 T+0/T+1 制度约束并保护长期核心底仓。
+- **全量备份恢复、券商对账单导入与去重通知**：支持 6 张核心表（含全量流水、设置、票据、风控与复盘笔记）带 SHA-256 校验的导出与空库恢复；支持 UTF-8 / GB18030 券商 CSV 预览差异、按成交编号去重并写账；站内提醒与可选 `PTMS_WEBHOOK_URL` Webhook 按 `event_key` 严格去重推送。
 - **PTMS 接口**：
-  - `GET /api/ptms/state`：获取双账户持仓投影、全量策略指标、盘中止损状态与可执行调仓单。
-  - `GET /api/ptms/review?account_id=CN_MAIN`：计算剔除出入金干扰的时间加权实盘净值 (TWR)、滑点 bp 与纪律遵守率。
-  - `GET /api/ptms/export?account_id=CN_MAIN&format=markdown|json`：导出 Markdown 复盘报告或 JSON 账本备份。
-  - `POST /api/ptms/ledger/{init,event,reconcile}`、`POST /api/ptms/account/config`、`POST /api/ptms/decisions/{create,execute,skip}`、`POST /api/ptms/stops/reset`、`POST /api/ptms/review/note`（仅限本机同源 JSON 请求）。
+  - `GET /api/ptms/state`：获取双账户持仓投影、执行门控 `data_gate`、全量策略指标、盘中止损状态、待办进度与未读通知。
+  - `GET /api/ptms/review?account_id=CN_MAIN`：计算剔除出入金干扰的时间加权实盘净值 (TWR)、滑点 bp、计划完成率与纪律遵守率。
+  - `GET /api/ptms/export?account_id=CN_MAIN&format=markdown|json`：导出 Markdown 复盘报告或全量账本流水 JSON（无 1000 条截断）。
+  - `GET /api/ptms/backup`、`POST /api/ptms/restore/{preview}`：导出与校验恢复 `schema_version=2` 全库备份。
+  - `POST /api/ptms/import/{preview,commit}`：解析券商 CSV 对账单、预览现金/持仓变化并去重入账。
+  - `GET /api/ptms/notifications`、`POST /api/ptms/notifications/read`：查询与标记站内提醒已读。
+  - `POST /api/ptms/ledger/{init,event,reconcile,reverse}`、`POST /api/ptms/account/config`、`POST /api/ptms/decisions/{create,execute,skip,cancel-remainder}`、`POST /api/ptms/stops/reset`、`POST /api/ptms/review/note`（仅限本机同源 JSON 请求）。
 
 ```powershell
 python -m pytest tests/test_ptms.py tests/test_live_dashboard.py -q

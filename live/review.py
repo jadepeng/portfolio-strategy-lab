@@ -83,10 +83,22 @@ def compute_twr_series(
 
     market = account['market']
     symbols = market_symbols(market)
-    ordered = sorted(
+    ordered_all = sorted(
         events,
         key=lambda e: (str(e['trade_date']), str(e['event_time']), int(e['event_id'])),
     )
+    reversed_ids = {
+        int(e['reverses_event_id'])
+        for e in ordered_all
+        if e.get('reverses_event_id') is not None
+    }
+    ordered = [
+        e
+        for e in ordered_all
+        if int(e['event_id']) not in reversed_ids and e.get('reverses_event_id') is None
+    ]
+    if not ordered:
+        return []
     start_date = str(ordered[0]['trade_date'])
 
     by_day: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -231,10 +243,10 @@ def build_review_report(
     """Assemble full performance, execution drift, slippage, and discipline review."""
     account_id = account['account_id']
     market = account['market']
-    events_desc = store.list_events(account_id, limit=1000)
+    events_desc = store.list_events(account_id, limit=None)
     events = list(reversed(events_desc))
-    tickets = store.list_tickets(account_id, limit=500)
-    notes = store.list_review_notes(account_id, limit=100)
+    tickets = store.list_tickets(account_id, limit=1000)
+    notes = store.list_review_notes(account_id, limit=200)
 
     price_df = build_price_history_for_review(market, live_daily, events, quotes, today_local_date)
     twr_curve = compute_twr_series(account, events, price_df, quotes, today_local_date)
@@ -250,7 +262,7 @@ def build_review_report(
         else None
     )
 
-    # Ticket & slippage audit
+    # Ticket & slippage audit (excluding reversed events from active stats)
     ticket_map = {t['decision_id']: t for t in tickets}
     trade_audits: list[dict[str, Any]] = []
     slippage_bps: list[float] = []
@@ -260,6 +272,7 @@ def build_review_report(
     for ev in events_desc:
         if ev['event_type'] not in ('BUY', 'SELL'):
             continue
+        is_rev = bool(ev.get('is_reversed'))
         did = ev.get('decision_id')
         ticket = ticket_map.get(did) if did is not None else None
         ref_price: float | None = None
@@ -276,13 +289,15 @@ def build_review_report(
                 slip_bp = round((fill_px / ref_price - 1.0) * 10000.0, 2)
             else:
                 slip_bp = round((1.0 - fill_px / ref_price) * 10000.0, 2)
-            slippage_bps.append(slip_bp)
+            if not is_rev:
+                slippage_bps.append(slip_bp)
 
         tag = str(ev.get('discipline_tag') or 'MANUAL_OVERRIDE')
-        if tag in ('FOLLOW', 'RISK_CUT'):
-            followed_trades += 1
-        else:
-            override_trades += 1
+        if not is_rev:
+            if tag in ('FOLLOW', 'RISK_CUT'):
+                followed_trades += 1
+            else:
+                override_trades += 1
 
         sym = str(ev.get('symbol') or '')
         trade_audits.append(
@@ -301,22 +316,38 @@ def build_review_report(
                 'decision_id': did,
                 'ticket_source': ticket['source'] if ticket else 'MANUAL_DIRECT',
                 'discipline_tag': tag,
+                'is_reversed': is_rev,
                 'note': ev.get('note', ''),
             }
         )
 
-    executed_tickets = sum(1 for t in tickets if t['status'] in ('EXECUTED', 'PARTIAL'))
+    executed_tickets = sum(1 for t in tickets if t['status'] == 'EXECUTED')
+    partial_tickets = sum(1 for t in tickets if t['status'] == 'PARTIAL')
     skipped_tickets = sum(1 for t in tickets if t['status'] == 'SKIPPED')
-    pending_tickets = sum(1 for t in tickets if t['status'] == 'PENDING')
-    resolved_tickets = executed_tickets + skipped_tickets
+    expired_tickets = sum(1 for t in tickets if t['status'] == 'EXPIRED')
+    pending_tickets = sum(1 for t in tickets if t['status'] in ('PENDING', 'PARTIAL'))
+    resolved_tickets = executed_tickets + partial_tickets + skipped_tickets + expired_tickets
     total_trades = followed_trades + override_trades
+
+    plan_tickets = [t for t in tickets if t['status'] in ('EXECUTED', 'PARTIAL', 'SKIPPED', 'EXPIRED')]
+    total_planned_notional = sum(float((t.get('progress') or {}).get('planned_notional') or 0.0) for t in plan_tickets)
+    total_filled_notional = sum(float((t.get('progress') or {}).get('filled_notional') or 0.0) for t in plan_tickets)
+    if total_planned_notional > 1e-9:
+        plan_completion_rate_pct = round(min(100.0, total_filled_notional / total_planned_notional * 100.0), 1)
+    elif resolved_tickets > 0:
+        plan_completion_rate_pct = round(executed_tickets / resolved_tickets * 100.0, 1)
+    else:
+        plan_completion_rate_pct = 100.0
 
     discipline_stats = {
         'total_tickets': len(tickets),
         'executed_tickets': executed_tickets,
+        'partial_tickets': partial_tickets,
         'skipped_tickets': skipped_tickets,
+        'expired_tickets': expired_tickets,
         'pending_tickets': pending_tickets,
-        'ticket_follow_rate_pct': round(executed_tickets / resolved_tickets * 100.0, 1) if resolved_tickets > 0 else 100.0,
+        'plan_completion_rate_pct': plan_completion_rate_pct,
+        'ticket_follow_rate_pct': plan_completion_rate_pct,
         'total_trades': total_trades,
         'followed_trades': followed_trades,
         'override_trades': override_trades,
@@ -380,7 +411,8 @@ def render_review_markdown(report: dict[str, Any]) -> str:
         "",
         "## 二、纪律与执行滑点审计",
         "",
-        f"- **决策票据统计**: 总计 {d['total_tickets']}（已执行 {d['executed_tickets']} / 跳过 {d['skipped_tickets']} / 待处理 {d['pending_tickets']}），票据执行率 `{d['ticket_follow_rate_pct']}%`",
+        f"- **决策计划统计**: 总计 {d['total_tickets']}（全部完成 {d['executed_tickets']} / 部分成交 {d.get('partial_tickets', 0)} / 已跳过 {d['skipped_tickets']} / 余量取消 {d.get('expired_tickets', 0)} / 待处理 {d['pending_tickets']}）",
+        f"- **计划完成率**: `{d['plan_completion_rate_pct']}%`",
         f"- **交易纪律遵守率**: `{d['trade_discipline_rate_pct']}%`（守纪 {d['followed_trades']} 笔 / 偏离或手动 {d['override_trades']} 笔）",
         f"- **平均实现滑点**: `{d['avg_slippage_bp'] if d['avg_slippage_bp'] is not None else '—'} bp`（样本 {d['slippage_samples']} 笔）",
         "",

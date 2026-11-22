@@ -34,8 +34,13 @@ class Element {
   append(...children) { this.children.push(...children); }
   replaceChildren(...children) { this.children = children; }
   querySelector() { return this.body || (this.body = new Element('tbody')); }
+  querySelectorAll() { return []; }
+  focus() { document.activeElement = this; }
   getBoundingClientRect() { return { left: 0, top: 0, width: 860, height: 290 }; }
-  closest() { return null; }
+  closest(sel) {
+    if (sel === '[data-ptms-action]' && this.dataset.ptmsAction) return this;
+    return null;
+  }
 }
 
 const elements = new Map([...template.matchAll(/\bid="([^"]+)"/g)].map((x) => [x[1], new Element(x[1])]));
@@ -53,11 +58,16 @@ get('view-overview').classList.toggle('active', true);
 const views = [...elements.values()].filter((x) => x.id.startsWith('view-'));
 const allNavViews = ['desk', 'portfolio', 'indicators', 'review', 'overview', 'cn', 'us', 'cross', 'intraday', 'risk', 'trades'];
 const nav = allNavViews.map((v) => { const el = new Element(); el.dataset.view = v; return el; });
+const docListeners = {};
 
 const document = {
   hidden: false,
+  activeElement: null,
   getElementById: get,
-  addEventListener() {},
+  addEventListener(name, cb) { (docListeners[name] = docListeners[name] || []).push(cb); },
+  removeEventListener(name, cb) {
+    if (docListeners[name]) docListeners[name] = docListeners[name].filter((x) => x !== cb);
+  },
   createElementNS: () => new Element(),
   querySelector: (sel) => get(sel.slice(1)),
   querySelectorAll: (sel) => (sel === '.view' ? views : sel === '.nav-item' ? nav : []),
@@ -102,7 +112,7 @@ const samplePtmsState = {
   },
   accounts: {
     CN_MAIN: {
-      account: { account_id: 'CN_MAIN', market: 'CN', currency: 'CNY', strategy_version: 'baseline', rebalance_deadband: 0.15, core_floors: { '515180.SH': 0.2 } },
+      account: { account_id: 'CN_MAIN', account_mode: 'REAL', market: 'CN', currency: 'CNY', strategy_version: 'baseline', rebalance_deadband: 0.15, core_floors: { '515180.SH': 0.2 } },
       portfolio: {
         initialized: true, event_count: 2, cash: 21000, cash_weight: 0.21, holdings_value: 79000, total_equity: 100000,
         unrealized_pnl: 1200, realized_pnl: 300, total_pnl: 1500, total_fees: 25, total_dividends: 0, net_capital_in: 98500,
@@ -118,7 +128,8 @@ const samplePtmsState = {
         '515180.SH': { symbol: '515180.SH', name: '红利ETF', session_date: '2026-11-20', status_note: '正在监控战术仓位', active_line: 1.36, candidate_line: 1.36, raw_trend_line: 1.35, shock_line: 1.36, prior_close: 1.40, daily_sigma: 0.008, peak: 1.42, ma: 1.38, last_price: 1.40, distance_pct: 2.94, below_count: 0, stage: 0, pending_stage: 0, cooldown_active: false, cooldown_remaining_days: 0, actual_weight: 0.42, core_floor: 0.2 },
       },
       plan: {
-        verdict: 'ACTION_REBALANCE', verdict_label: '建议按周频调仓', verdict_reason: '当前仓位偏离已达到调仓阈值', should_execute: true,
+        verdict: 'ACTION_REBALANCE', verdict_label: '建议按周频调仓', verdict_reason: '当前仓位偏离已达到调仓阈值', should_execute: true, can_execute_plan: true,
+        data_gate: { status: 'READY', actionable: true, can_execute_plan: true, reasons: [], signal_time_label: '2026-11-20 收盘后', earliest_execution_window: '2026-11-23 09:30 A股开盘起', market_state_label: '休市' },
         signal_cutoff: '2026-11-20', signal_origin: 'online_recomputed_simulation', turnover: 0.16, deadband: 0.15, total_est_fee: 2.1, projected_cash_after: 800, cooldown_clips: [],
         weights_comparison: [{ symbol: '515180.SH', bucket: 'red', name: '红利ETF', actual_weight: 0.42, effective_actual_weight: 0.42, weekly_target: 0.44, effective_target: 0.44, drift: 0.02, core_floor: 0.2, cooldown_active: false, pending_stage: 0 }],
         orders: [{ symbol: '511880.SH', name: '货币ETF', side: 'BUY', quantity: 200, lot_size: 100, sellable_shares: 0, ref_price: 100.9, est_amount: 20180, est_fee: 2.02, t_plus: 0, reason: '配置货币ETF' }],
@@ -127,6 +138,10 @@ const samplePtmsState = {
       events: [{ event_id: 1, trade_date: '2026-11-20', event_time: '2026-11-20T15:00:00+08:00', event_type: 'INIT_POSITION', symbol: '515180.SH', quantity: 30000, price: 1.35, fee: 0, cash_delta: 0, discipline_tag: 'INIT', note: '建账' }],
     },
   },
+  notifications: [
+    { notification_id: 1, account_id: 'CN_MAIN', category: 'WEEKLY_SIGNAL', severity: 'action', title: '周频信号生效', message: 'A股存在调仓建议', read_at: null, created_at: '2026-11-23T01:35:00Z' },
+  ],
+  unread_notifications: 1,
 };
 
 const sampleReview = {
@@ -135,7 +150,7 @@ const sampleReview = {
   currency: 'CNY',
   strategy_version: 'baseline',
   kpis: { start_date: '2026-11-20', as_of_date: '2026-11-22', twr_return_pct: 1.5, model_return_pct: 1.2, tracking_gap_pp: 0.3, real_max_dd_pct: -0.4, model_max_dd_pct: -0.6, total_fees: 25, total_dividends: 0 },
-  discipline: { trade_discipline_rate_pct: 100.0, avg_slippage_bp: 2.5, ticket_follow_rate_pct: 100.0 },
+  discipline: { trade_discipline_rate_pct: 100.0, plan_completion_rate_pct: 0.3, executed_tickets: 0, partial_tickets: 1, skipped_tickets: 0, avg_slippage_bp: 2.5, ticket_follow_rate_pct: 0.3 },
   twr_curve: [{ d: '2026-11-20', nav: 1.0 }, { d: '2026-11-22', nav: 1.015 }],
   benchmark_curve: [{ d: '2026-11-20', nav: 1.0 }, { d: '2026-11-22', nav: 1.012 }],
   trade_audits: [],
@@ -183,17 +198,24 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
 (async () => {
   await settle();
   await settle();
-  // T1 shows live-panel and renders product copy
+  // T1 shows live-panel and renders product copy, gate bar, badge & bell
   assert.equal(get('live-panel').hidden, false);
-  assert.match(get('ptms-desk-root').innerHTML, /建议按周频调仓/);
-  assert.match(get('ptms-desk-root').innerHTML, /货币ETF/);
+  const deskHtml = get('ptms-desk-root').innerHTML;
+  assert.match(deskHtml, /建议按周频调仓/);
+  assert.match(deskHtml, /货币ETF/);
+  assert.match(deskHtml, /实盘账户/);
+  assert.match(deskHtml, /数据与窗口就绪/);
+  assert.match(deskHtml, /ptms-notif-count">1/);
 
-  // T2 hides live-panel
+  // T2 hides live-panel and exposes import / backup / restore / reversal controls
   nav[1].listeners.click();
   await settle();
   assert.equal(get('live-panel').hidden, true);
   assert.match(get('ptms-portfolio-root').innerHTML, /红利ETF/);
   assert.match(get('ptms-portfolio-root').innerHTML, /按成本估值/);
+  assert.match(get('ptms-portfolio-root').innerHTML, /导入对账单/);
+  assert.match(get('ptms-portfolio-root').innerHTML, /\/api\/ptms\/backup/);
+  assert.match(get('ptms-portfolio-root').innerHTML, /冲正/);
 
   // T3 hides live-panel
   nav[2].listeners.click();
@@ -201,14 +223,65 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
   assert.equal(get('live-panel').hidden, true);
   assert.match(get('ptms-indicators-root').innerHTML, /创业板趋势温度与动量/);
 
-  // T4 hides live-panel
+  // T4 hides live-panel and renders separated completion vs discipline rate
   nav[3].listeners.click();
   await settle();
   await settle();
   assert.equal(get('live-panel').hidden, true);
   assert.match(get('ptms-review-root').innerHTML, /烟雾测试笔记/);
   assert.match(get('ptms-review-root').innerHTML, /周度复盘/);
+  assert.match(get('ptms-review-root').innerHTML, /计划完成率 \/ 纪律遵守率/);
+  assert.match(get('ptms-review-root').innerHTML, /0\.3%/);
+  assert.match(get('ptms-review-root').innerHTML, /纪律遵守率 100\.0%/);
   assert.match(get('ptms-review-chart').innerHTML, /<svg/);
+
+  // Verify BLOCKED gate + PARTIAL ticket state rendering
+  samplePtmsState.accounts.CN_MAIN.plan.verdict = 'DATA_BLOCKED';
+  samplePtmsState.accounts.CN_MAIN.plan.verdict_label = '数据暂不完整，暂停按计划操作';
+  samplePtmsState.accounts.CN_MAIN.plan.can_execute_plan = false;
+  samplePtmsState.accounts.CN_MAIN.plan.should_execute = false;
+  samplePtmsState.accounts.CN_MAIN.plan.data_gate = {
+    status: 'BLOCKED', actionable: false, can_execute_plan: false,
+    reasons: ['创业板ETF(159915.SZ) 缺少实时/收盘报价'],
+    signal_time_label: '2026-11-20 收盘后', earliest_execution_window: '2026-11-23 09:30 A股开盘起', market_state_label: '休市',
+  };
+  samplePtmsState.accounts.CN_MAIN.tickets = [{
+    decision_id: 7, source: 'WEEKLY_REBALANCE', status: 'PARTIAL', signal_cutoff: '2026-11-20',
+    reason: '按周频调仓建仓', created_at: '2026-11-23T01:35:00Z',
+    snapshot: { orders: [{ symbol: '515180.SH', name: '红利ETF', side: 'BUY', quantity: 32100, lot_size: 100, ref_price: 1.35, est_fee: 4.33 }] },
+    progress: {
+      planned_shares: 32100, filled_shares: 100, remaining_shares: 32000, completion_pct: 0.31, all_filled: false,
+      legs: [{ symbol: '515180.SH', name: '红利ETF', side: 'BUY', lot_size: 100, planned_qty: 32100, filled_qty: 100, remaining_qty: 32000, ref_price: 1.35 }],
+    },
+  }];
+  nav[0].listeners.click();
+  await settle();
+  context.window.__ptmsOnLive();
+  await settle();
+  const blockedHtml = get('ptms-desk-root').innerHTML;
+  assert.match(blockedHtml, /数据未就绪（已拦截计划单）/);
+  assert.match(blockedHtml, /create-weekly-ticket" disabled/);
+  assert.match(blockedHtml, /<button type="button" class="ghost-button" data-ptms-action="open-event">手动记一笔<\/button>/);
+  assert.match(blockedHtml, /部分成交 · 剩余 32,000 股/);
+  assert.match(blockedHtml, /继续补录余量/);
+  assert.match(blockedHtml, /取消余量/);
+
+  // Test open-init modal: empty defaults (no 100000 / 1.0), live summary, focus move + Escape close
+  const triggerBtn = new Element('init-trigger');
+  triggerBtn.dataset.ptmsAction = 'open-init';
+  document.activeElement = triggerBtn;
+  const host = get('ptms-modal-host');
+  let modalTargetEl = null;
+  host.querySelector = () => ({ focus() { document.activeElement = modalTargetEl || triggerBtn; }, querySelectorAll: () => [modalTargetEl = new Element('first-modal-input')] });
+  (docListeners.click || []).forEach((fn) => fn({ target: triggerBtn }));
+  assert.equal(host.hidden, false);
+  assert.ok(!host.innerHTML.includes('value="100000"'), 'Init modal must not prefill 100000 cash');
+  assert.ok(!host.innerHTML.includes('value="1.0"'), 'Init modal must not prefill 1.0 cost price');
+  assert.match(host.innerHTML, /ptms-init-summary/);
+  assert.notEqual(document.activeElement, triggerBtn);
+  (docListeners.keydown || []).forEach((fn) => fn({ key: 'Escape', preventDefault() {} }));
+  assert.equal(host.hidden, true);
+  assert.equal(document.activeElement, triggerBtn);
 
   // Switching back to T1 or research view restores live-panel
   nav[0].listeners.click();
@@ -227,6 +300,9 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
   for (const forbidden of [
     'ACTION_REBALANCE',
     'HOLD_WITHIN_DEADBAND',
+    'DATA_BLOCKED',
+    'WAIT_EXECUTION_WINDOW',
+    'MANUAL_OVERRIDE',
     'cost_fallback',
     '(CASH_IN)',
     '[WEEKLY]',
@@ -234,6 +310,9 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
     'RECONCILE',
     'CN_MAIN',
     'US_MAIN',
+    'PARTIAL',
+    'BLOCKED',
+    'WAIT_WINDOW',
     '日σ',
     '未熊',
   ]) {

@@ -20,8 +20,24 @@
     ACTION_INTRADAY_STOP: '盘中减仓',
     ACTION_PRIORITY_EXIT: '风控减仓',
     ACTION_REBALANCE: '建议调仓',
+    WAIT_EXECUTION_WINDOW: '等待窗口',
+    DATA_BLOCKED: '数据拦截',
     HOLD_WITHIN_DEADBAND: '维持现状',
     NEEDS_INIT: '待初始化',
+  };
+  const GATE_STATUS_LABELS = {
+    READY: '数据与窗口就绪',
+    WAIT_WINDOW: '等待最早执行窗口',
+    BLOCKED: '数据未就绪（已拦截计划单）',
+  };
+  const ACCOUNT_MODE_LABELS = {
+    REAL: '实盘账户',
+    DEMO: '示例账户（非实盘）',
+  };
+  const NOTIF_CAT_LABELS = {
+    FEED_STATUS: '行情状态',
+    WEEKLY_SIGNAL: '周频信号',
+    INTRADAY_STOP: '盘中防守',
   };
   const EVENT_LABELS = {
     INIT_POSITION: '期初建账',
@@ -36,8 +52,10 @@
     FOLLOW: '按计划执行',
     RISK_CUT: '盘中风控减仓',
     DELAYED: '延迟执行',
-    MANUAL_OVERRIDE: '手动调整',
+    MANUAL_OVERRIDE: '手动补录',
     RECONCILE: '余额校准',
+    CORRECTION: '冲正更正',
+    IMPORT: '对账单导入',
     INIT: '期初建账',
   };
   const PRICE_SOURCE_LABELS = {
@@ -90,6 +108,8 @@
     error: '',
     currentView: 'overview',
     switchedDefault: false,
+    notifOpen: false,
+    lastFocusedEl: null,
   };
 
   const $ = (id) => document.getElementById(id);
@@ -200,6 +220,24 @@
     const acc = bundle.account;
     const pf = bundle.portfolio;
     const curLabel = CURRENCY_NAMES[acc.currency] || acc.currency;
+    const mode = acc.account_mode || 'REAL';
+    const modeLabel = ACCOUNT_MODE_LABELS[mode] || ACCOUNT_MODE_LABELS.REAL;
+    const modeCls = mode === 'DEMO' ? 'amber' : 'green';
+    const notifs = (ptms.stateData && ptms.stateData.notifications) || [];
+    const unreadCount = Number((ptms.stateData && ptms.stateData.unread_notifications) || 0);
+    const notifRows = notifs.length
+      ? notifs.slice(0, 12).map((n) => `
+          <button type="button" class="ptms-notif-item ${n.read_at ? '' : 'unread'}" data-ptms-action="click-notif" data-notif-id="${n.notification_id}" data-notif-account="${esc(n.account_id || '')}">
+            <div class="ptms-actions-row">
+              <span class="ptms-badge ${n.severity === 'urgent' ? 'red' : n.severity === 'warning' ? 'amber' : n.severity === 'action' ? 'green' : 'blue'}">${esc(NOTIF_CAT_LABELS[n.category] || '提醒')}</span>
+              <strong>${esc(n.title)}</strong>
+            </div>
+            <p>${esc(n.message)}</p>
+            <small>${n.account_id ? esc(accountName(n.account_id)) + ' · ' : ''}${esc(String(n.created_at || '').slice(0, 19).replace('T', ' '))}${n.read_at ? ' · 已读' : ' · 未读'}</small>
+          </button>
+        `).join('')
+      : '<p class="empty">暂无提醒事件</p>';
+
     return `
       <div class="ptms-account-bar">
         <div class="ptms-account-tabs">
@@ -207,10 +245,23 @@
           <button type="button" class="ptms-account-tab ${ptms.accountId === 'US_MAIN' ? 'active' : ''}" data-ptms-account="US_MAIN">美股账户（美元）</button>
         </div>
         <div class="ptms-account-meta">
+          <span class="ptms-badge ${modeCls}">${esc(modeLabel)}</span>
           <span>总资产 <strong>${fmtNum(pf.total_equity)} ${esc(curLabel)}</strong></span>
           <span>可用现金 <strong>${fmtNum(pf.cash)} ${esc(curLabel)}</strong></span>
           <span>策略 <strong>${esc(VERSION_LABELS[acc.strategy_version] || acc.strategy_version)}</strong></span>
           <span>调仓阈值 <strong>${fmtNum(acc.rebalance_deadband * 100, 0)}%</strong></span>
+          <div class="ptms-notif-wrap">
+            <button type="button" class="ghost-button ptms-notif-btn" data-ptms-action="toggle-notifs" aria-expanded="${ptms.notifOpen ? 'true' : 'false'}">🔔 提醒${unreadCount > 0 ? `<span class="ptms-notif-count">${unreadCount}</span>` : ''}</button>
+            ${ptms.notifOpen ? `
+              <div class="ptms-notif-popover" role="region" aria-label="站内交易提醒">
+                <div class="ptms-notif-head">
+                  <strong>站内待办与行情提醒（${unreadCount} 未读）</strong>
+                  <button type="button" class="ghost-button ptms-mini-btn" data-ptms-action="read-all-notifs">全部已读</button>
+                </div>
+                ${notifRows}
+              </div>
+            ` : ''}
+          </div>
           <button type="button" class="ghost-button" data-ptms-action="reload-state">↻ 刷新数据</button>
         </div>
       </div>
@@ -221,6 +272,8 @@
     if (verdict === 'ACTION_INTRADAY_STOP') return 'verdict-stop';
     if (verdict === 'ACTION_PRIORITY_EXIT') return 'verdict-priority';
     if (verdict === 'ACTION_REBALANCE') return 'verdict-rebalance';
+    if (verdict === 'DATA_BLOCKED') return 'verdict-blocked';
+    if (verdict === 'WAIT_EXECUTION_WINDOW') return 'verdict-wait';
     if (verdict === 'NEEDS_INIT') return 'verdict-init';
     return 'verdict-hold';
   }
@@ -240,8 +293,39 @@
 
     const { account, portfolio, plan, stop_states: stops, tickets } = bundle;
     const cur = account.currency;
-    const pendingTickets = (tickets || []).filter((t) => t.status === 'PENDING');
+    const pendingTickets = (tickets || []).filter((t) => t.status === 'PENDING' || t.status === 'PARTIAL');
     const pendingWeekly = pendingTickets.find((t) => t.source === 'WEEKLY_REBALANCE' && t.signal_cutoff === plan.signal_cutoff);
+    const dataGate = plan.data_gate || {
+      status: 'READY',
+      can_execute_plan: true,
+      reasons: [],
+      signal_time_label: plan.signal_cutoff ? `${plan.signal_cutoff} 收盘后` : '暂无',
+      earliest_execution_window: '—',
+      market_state_label: '—',
+    };
+    const gateClass = dataGate.status === 'READY' ? 'ready' : dataGate.status === 'WAIT_WINDOW' ? 'wait' : 'blocked';
+    const gateBadgeCls = dataGate.status === 'READY' ? 'green' : dataGate.status === 'WAIT_WINDOW' ? 'amber' : 'red';
+    const gateLabel = GATE_STATUS_LABELS[dataGate.status] || GATE_STATUS_LABELS.BLOCKED;
+    const gateHtml = `
+      <div class="ptms-gate-bar ${gateClass}">
+        <div class="ptms-gate-top">
+          <div class="ptms-actions-row">
+            <span class="ptms-badge ${gateBadgeCls}">${esc(gateLabel)}</span>
+            <strong>${account.market === 'CN' ? 'A股执行门控' : '美股执行门控'}</strong>
+          </div>
+          <div class="ptms-gate-meta">
+            <span>市场状态：<strong>${esc(dataGate.market_state_label || '—')}</strong></span>
+            <span>信号形成：<strong>${esc(dataGate.signal_time_label || '—')}</strong></span>
+            <span>最早可执行窗口：<strong>${esc(dataGate.earliest_execution_window || '—')}</strong></span>
+          </div>
+        </div>
+        ${(dataGate.reasons || []).length ? `<ul class="ptms-gate-reasons">${dataGate.reasons.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>` : ''}
+      </div>
+    `;
+    const canExecutePlan = plan.can_execute_plan !== undefined
+      ? Boolean(plan.can_execute_plan)
+      : Boolean(portfolio.initialized && dataGate.can_execute_plan !== false);
+
     const clipsHtml = (plan.cooldown_clips || []).map((c) => `
       <div class="ptms-alert warn">
         <strong>冷却期加仓已拦截：${esc(c.name)} (${esc(c.symbol)})</strong> — 周频目标原为 ${fmtW(c.weekly_target)}，因盘中触发减仓正处于冷却期（至 ${esc(c.cooldown_until_date || '待执行')}），已自动下调至 ${fmtW(c.clipped_to)}，释放资金转入现金管理标的。
@@ -328,33 +412,65 @@
     const pendingHtml = pendingTickets.length
       ? pendingTickets.map((t) => {
           const ordCount = ((t.snapshot || {}).orders || []).length;
+          const prog = t.progress || {};
+          const hasPlanShares = Number(prog.planned_shares || 0) > 0;
+          const isPartial = t.status === 'PARTIAL';
+          const statusBadge = isPartial
+            ? `<span class="ptms-badge amber">部分成交 · 剩余 ${fmtNum(prog.remaining_shares, 0)} 股</span>`
+            : '<span class="ptms-badge blue">待确认</span>';
+          const legsSummary = (prog.legs || [])
+            .filter((l) => l.remaining_qty > 0)
+            .map((l) => `${esc(l.name)} 剩余 ${fmtNum(l.remaining_qty, l.lot_size > 1 ? 0 : 2)} 股`)
+            .join(' · ');
+          const progressHtml = hasPlanShares
+            ? `
+              <div class="ptms-progress">
+                <div class="ptms-progress-meta">
+                  <span>已成交 ${fmtNum(prog.filled_shares, 0)} / ${fmtNum(prog.planned_shares, 0)} 股 · <strong>剩余 ${fmtNum(prog.remaining_shares, 0)} 股</strong></span>
+                  <span>完成度 ${fmtNum(prog.completion_pct, 1)}%</span>
+                </div>
+                <div class="ptms-progress-track"><div class="ptms-progress-fill ${isPartial ? 'partial' : ''}" style="width:${Math.min(100, Math.max(0, Number(prog.completion_pct || 0)))}%"></div></div>
+                ${legsSummary ? `<small style="color:#6d7f92">${legsSummary}</small>` : ''}
+              </div>
+            `
+            : '';
           return `
             <div class="ptms-ticket-card ${t.source === 'INTRADAY_STOP' ? 'urgent' : ''}">
               <div class="ptms-ticket-head">
-                <div>
+                <div class="ptms-actions-row">
                   <span class="ptms-badge ${t.source === 'INTRADAY_STOP' ? 'red' : 'blue'}">${t.source === 'INTRADAY_STOP' ? '盘中防守减仓' : t.source === 'WEEKLY_REBALANCE' ? '周频调仓计划' : '手动计划'}</span>
+                  ${statusBadge}
                   <strong>#${t.decision_id} · ${esc(t.reason)}</strong>
                 </div>
                 <div class="ptms-actions-row">
-                  <button type="button" class="solid-button" data-ptms-action="open-execute-ticket" data-decision-id="${t.decision_id}">确认成交（${ordCount} 笔）</button>
-                  <button type="button" class="ghost-button" data-ptms-action="open-skip-ticket" data-decision-id="${t.decision_id}">暂不执行</button>
+                  <button type="button" class="solid-button" data-ptms-action="open-execute-ticket" data-decision-id="${t.decision_id}">${isPartial ? '继续补录余量' : `确认成交（${ordCount} 笔）`}</button>
+                  ${isPartial
+                    ? `<button type="button" class="ghost-button" data-ptms-action="open-cancel-remainder" data-decision-id="${t.decision_id}">取消余量</button>`
+                    : `<button type="button" class="ghost-button" data-ptms-action="open-skip-ticket" data-decision-id="${t.decision_id}">暂不执行</button>`}
                 </div>
               </div>
+              ${progressHtml}
               <small style="color:#708295">信号日期：${esc(t.signal_cutoff)} · 创建于 ${esc(String(t.created_at).slice(0, 19).replace('T', ' '))}</small>
             </div>
           `;
         }).join('')
-      : '<p class="empty">当前没有待确认的调仓单。</p>';
+      : '<p class="empty">当前没有待确认或未完结的调仓单。</p>';
 
     const badgeText = VERDICT_BADGES[plan.verdict] || '状态更新';
+    const verdictBadgeTone = plan.verdict === 'DATA_BLOCKED'
+      ? 'red'
+      : plan.verdict === 'WAIT_EXECUTION_WINDOW'
+        ? 'amber'
+        : plan.should_execute ? 'green' : 'blue';
 
     root.innerHTML = `
       ${accountSwitcherBar(bundle)}
       ${ptms.error ? `<div class="ptms-alert error">${esc(ptms.error)}</div>` : ''}
+      ${gateHtml}
       <section class="ptms-verdict ${renderVerdictClass(plan.verdict)}">
         <div class="ptms-verdict-main">
           <div class="ptms-verdict-title">
-            <span class="ptms-badge ${plan.should_execute ? 'green' : 'blue'}">${esc(badgeText)}</span>
+            <span class="ptms-badge ${verdictBadgeTone}">${esc(badgeText)}</span>
             <strong>${esc(plan.verdict_label)}</strong>
           </div>
           <p>${esc(plan.verdict_reason)}</p>
@@ -368,10 +484,14 @@
         </div>
         <div class="ptms-actions-row">
           ${!portfolio.initialized
-            ? '<button type="button" class="solid-button" data-ptms-action="open-init">初始化账户持仓</button>'
+            ? `
+              <button type="button" class="solid-button" data-ptms-action="open-init">初始化实盘持仓</button>
+              <button type="button" class="ghost-button" data-ptms-action="open-load-demo">载入示例账户（仅演示）</button>
+              <button type="button" class="ghost-button" data-ptms-action="open-restore">从备份恢复</button>
+            `
             : `
-              <button type="button" class="ghost-button" data-ptms-action="create-weekly-ticket" ${pendingWeekly ? 'disabled' : ''}>${pendingWeekly ? `已存待办单 #${pendingWeekly.decision_id}` : '保存为待办单'}</button>
-              <button type="button" class="solid-button" data-ptms-action="execute-current-plan" ${(plan.orders || []).length ? '' : 'disabled'}>确认按单成交</button>
+              <button type="button" class="ghost-button" data-ptms-action="create-weekly-ticket" ${(!canExecutePlan || pendingWeekly) ? 'disabled' : ''}>${pendingWeekly ? `已存待办单 #${pendingWeekly.decision_id}` : '保存为待办单'}</button>
+              <button type="button" class="solid-button" data-ptms-action="execute-current-plan" ${(!canExecutePlan || !(plan.orders || []).length) ? 'disabled' : ''}>确认按单成交</button>
               <button type="button" class="ghost-button" data-ptms-action="open-event">手动记一笔</button>
             `}
         </div>
@@ -450,7 +570,10 @@
           <div class="ptms-actions-row">
             <button type="button" class="solid-button" data-ptms-action="open-init">初始化持仓</button>
             <button type="button" class="ghost-button" data-ptms-action="open-event">+ 记一笔交易 / 出入金</button>
+            <button type="button" class="ghost-button" data-ptms-action="open-import">导入对账单 (CSV)</button>
             <button type="button" class="ghost-button" data-ptms-action="open-reconcile">核对券商余额</button>
+            <a class="ghost-button" style="text-decoration:none" href="/api/ptms/backup">完整备份 (.json)</a>
+            <button type="button" class="ghost-button" data-ptms-action="open-restore">从备份恢复</button>
             <button type="button" class="ghost-button" data-ptms-action="open-config">账户设置</button>
           </div>
         </div>
@@ -490,23 +613,32 @@
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>编号</th><th>交易日</th><th>类型</th><th>标的</th><th>股数</th><th>单价</th><th>手续费</th><th>资金变动</th><th>执行方式</th><th>关联计划</th><th>备注</th></tr></thead>
+            <thead><tr><th>编号</th><th>交易日</th><th>类型</th><th>标的</th><th>股数</th><th>单价</th><th>手续费</th><th>资金变动</th><th>执行方式</th><th>关联计划</th><th>备注</th><th>操作</th></tr></thead>
             <tbody>
-              ${filteredEvents.length ? filteredEvents.map((e) => `
-                <tr>
-                  <td>#${e.event_id}</td>
-                  <td><strong>${esc(e.trade_date)}</strong><br><small>${esc(String(e.event_time).slice(11, 19))}</small></td>
-                  <td><span class="ptms-badge ${e.event_type === 'BUY' || e.event_type === 'CASH_IN' ? 'green' : e.event_type === 'SELL' || e.event_type === 'CASH_OUT' ? 'red' : 'blue'}">${esc(EVENT_LABELS[e.event_type] || e.event_type)}</span></td>
-                  <td>${esc(e.symbol || '资金账户')}</td>
-                  <td>${e.quantity ? fmtNum(e.quantity, 2) : '—'}</td>
-                  <td>${e.price ? fmtNum(e.price, 4) : '—'}</td>
-                  <td>${e.fee ? fmtNum(e.fee) : '0.00'}</td>
-                  <td class="${e.cash_delta >= 0 ? 'text-green' : 'text-red'}">${e.cash_delta >= 0 ? '+' : ''}${fmtNum(e.cash_delta)}</td>
-                  <td><span class="ptms-badge">${esc(DISCIPLINE_LABELS[e.discipline_tag] || e.discipline_tag)}</span></td>
-                  <td>${e.decision_id ? `#${e.decision_id}` : '—'}</td>
-                  <td>${esc(e.note)}</td>
-                </tr>
-              `).join('') : '<tr><td colspan="11">暂无记录，请先点击右上角「初始化持仓」录入当前账户余额</td></tr>'}
+              ${filteredEvents.length ? filteredEvents.map((e) => {
+                const isRev = Boolean(e.is_reversed) || e.reverses_event_id != null;
+                const statusPill = e.reverses_event_id != null
+                  ? '<span class="ptms-badge amber">冲正单</span>'
+                  : e.is_reversed
+                    ? '<span class="ptms-badge red">已冲正</span>'
+                    : '';
+                return `
+                  <tr class="${isRev ? 'ptms-row-reversed' : ''}">
+                    <td>#${e.event_id}</td>
+                    <td><strong>${esc(e.trade_date)}</strong><br><small>${esc(String(e.event_time).slice(11, 19))}</small></td>
+                    <td><span class="ptms-badge ${e.event_type === 'BUY' || e.event_type === 'CASH_IN' ? 'green' : e.event_type === 'SELL' || e.event_type === 'CASH_OUT' ? 'red' : 'blue'}">${esc(EVENT_LABELS[e.event_type] || e.event_type)}</span> ${statusPill}</td>
+                    <td>${esc(e.symbol || '资金账户')}</td>
+                    <td>${e.quantity ? fmtNum(e.quantity, 2) : '—'}</td>
+                    <td>${e.price ? fmtNum(e.price, 4) : '—'}</td>
+                    <td>${e.fee ? fmtNum(e.fee) : '0.00'}</td>
+                    <td class="${e.cash_delta >= 0 ? 'text-green' : 'text-red'}">${e.cash_delta >= 0 ? '+' : ''}${fmtNum(e.cash_delta)}</td>
+                    <td><span class="ptms-badge">${esc(DISCIPLINE_LABELS[e.discipline_tag] || e.discipline_tag)}</span></td>
+                    <td>${e.decision_id ? `#${e.decision_id}` : '—'}</td>
+                    <td>${esc(e.note)}</td>
+                    <td>${isRev ? '—' : `<button type="button" class="ghost-button ptms-mini-btn" data-ptms-action="open-reverse-event" data-event-id="${e.event_id}">冲正</button>`}</td>
+                  </tr>
+                `;
+              }).join('') : '<tr><td colspan="12">暂无记录，请先点击右上角「初始化持仓」录入当前账户余额</td></tr>'}
             </tbody>
           </table>
         </div>
@@ -702,11 +834,12 @@
     const gapStr = k.tracking_gap_pp != null
       ? `${k.tracking_gap_pp >= 0 ? '领先 ' : '落后 '}${fmtNum(Math.abs(k.tracking_gap_pp), 2)} 个百分点`
       : '—';
+    const completionPct = d.plan_completion_rate_pct ?? d.ticket_follow_rate_pct ?? 100;
     const kpis = [
       { name: '账户真实收益率', value: k.twr_return_pct != null ? fmtPct(k.twr_return_pct) : '未初始化', hint: `已剔除出入金影响 · 周期 ${k.start_date || '—'} 至 ${k.as_of_date}`, accent: '#14a989', icon: '↗' },
       { name: '同期策略参考收益', value: k.model_return_pct != null ? fmtPct(k.model_return_pct) : '—', hint: `相对策略：${gapStr}`, accent: '#5378e5', icon: '◫' },
       { name: '最大回撤对比', value: k.real_max_dd_pct != null ? fmtPct(k.real_max_dd_pct) : '—', hint: `策略同期最大回撤 ${k.model_max_dd_pct != null ? fmtPct(k.model_max_dd_pct) : '—'}`, accent: '#e4a64d', icon: '⌁' },
-      { name: '纪律遵守率 / 成交偏差', value: `${fmtNum(d.trade_discipline_rate_pct, 1)}%`, hint: `平均成交偏差 ${d.avg_slippage_bp != null ? fmtNum(d.avg_slippage_bp, 1) + ' 基点' : '暂无样本'} · 计划执行率 ${fmtNum(d.ticket_follow_rate_pct, 1)}%`, accent: '#7e83e5', icon: '✦' },
+      { name: '计划完成率 / 纪律遵守率', value: `${fmtNum(completionPct, 1)}%`, hint: `纪律遵守率 ${fmtNum(d.trade_discipline_rate_pct, 1)}% · 平均成交偏差 ${d.avg_slippage_bp != null ? fmtNum(d.avg_slippage_bp, 1) + ' 基点' : '暂无样本'} · 完成 ${d.executed_tickets || 0} / 部分 ${d.partial_tickets || 0} / 跳过 ${d.skipped_tickets || 0}`, accent: '#7e83e5', icon: '✦' },
     ];
 
     root.innerHTML = `
@@ -724,7 +857,8 @@
           <div><span class="micro">PERFORMANCE COMPARISON</span><h3>账户真实净值 vs 策略理论基准（起点 = 100）</h3></div>
           <div class="ptms-actions-row">
             <a class="ghost-button" style="text-decoration:none" href="/api/ptms/export?account_id=${encodeURIComponent(ptms.accountId)}&format=markdown">⇩ 导出复盘报告 (.md)</a>
-            <a class="ghost-button" style="text-decoration:none" href="/api/ptms/export?account_id=${encodeURIComponent(ptms.accountId)}&format=json">⇩ 备份账本数据 (.json)</a>
+            <a class="ghost-button" style="text-decoration:none" href="/api/ptms/backup">⇩ 完整备份 (.json)</a>
+            <button type="button" class="ghost-button" data-ptms-action="open-restore">↺ 从备份恢复</button>
           </div>
         </div>
         <div class="chart-legend">
@@ -782,7 +916,7 @@
                     <td>${fmtNum(t.fill_price, 4)}</td>
                     <td>${t.ref_price != null ? fmtNum(t.ref_price, 4) : '—'}</td>
                     <td class="${t.slippage_bp != null && t.slippage_bp > 15 ? 'text-red' : ''}">${t.slippage_bp != null ? `${fmtNum(t.slippage_bp, 1)} 基点` : '—'}</td>
-                    <td><span class="ptms-badge ${t.discipline_tag === 'FOLLOW' || t.discipline_tag === 'RISK_CUT' ? 'green' : 'amber'}">${esc(DISCIPLINE_LABELS[t.discipline_tag] || t.discipline_tag)}</span></td>
+                    <td><span class="ptms-badge ${t.discipline_tag === 'FOLLOW' || t.discipline_tag === 'RISK_CUT' ? 'green' : 'amber'}">${esc(DISCIPLINE_LABELS[t.discipline_tag] || t.discipline_tag)}</span>${t.is_reversed ? ' <span class="ptms-badge red">已冲正</span>' : ''}</td>
                   </tr>
                 `).join('') : '<tr><td colspan="6">暂无买卖成交记录</td></tr>'}
               </tbody>
@@ -833,11 +967,29 @@
     }
   }
 
+  function newClientRequestId(prefix = 'req') {
+    return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  }
+
+  async function readFileSmartText(file, fallbackEncoding = 'gb18030') {
+    const buf = await file.arrayBuffer();
+    try {
+      return new TextDecoder('utf-8', { fatal: true }).decode(buf).replace(/^\uFEFF/, '');
+    } catch {
+      return new TextDecoder(fallbackEncoding).decode(buf).replace(/^\uFEFF/, '');
+    }
+  }
+
   function openModal(title, bodyHtml, onSubmit) {
     const host = $('ptms-modal-host');
     if (!host) return;
+    ptms.lastFocusedEl = document.activeElement || null;
+    if (ptms._modalKeyHandler) {
+      document.removeEventListener('keydown', ptms._modalKeyHandler);
+      ptms._modalKeyHandler = null;
+    }
     host.innerHTML = `
-      <div class="ptms-modal" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+      <div class="ptms-modal" role="dialog" aria-modal="true" aria-label="${esc(title)}" tabindex="-1">
         <div class="ptms-modal-head">
           <h3>${esc(title)}</h3>
           <button type="button" class="ptms-modal-close" data-ptms-close="1" aria-label="关闭">×</button>
@@ -848,10 +1000,54 @@
     `;
     host.hidden = false;
     const form = $('ptms-modal-form');
+
+    const getFocusables = () => {
+      const modal = host.querySelector ? host.querySelector('.ptms-modal') : null;
+      if (!modal || !modal.querySelectorAll) return [];
+      return Array.from(
+        modal.querySelectorAll(
+          'input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), a[href]'
+        )
+      );
+    };
+
+    const formFirst = form && form.querySelector
+      ? form.querySelector('input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])')
+      : null;
+    const initialTarget = formFirst || getFocusables()[0] || (host.querySelector ? host.querySelector('.ptms-modal') : null);
+    if (initialTarget && typeof initialTarget.focus === 'function') {
+      initialTarget.focus();
+    }
+
+    ptms._modalKeyHandler = (ev) => {
+      if (host.hidden) return;
+      if (ev.key === 'Escape') {
+        if (typeof ev.preventDefault === 'function') ev.preventDefault();
+        closeModal();
+        return;
+      }
+      if (ev.key === 'Tab') {
+        const focusables = getFocusables();
+        if (!focusables.length) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (ev.shiftKey) {
+          if (document.activeElement === first || !focusables.includes(document.activeElement)) {
+            if (typeof ev.preventDefault === 'function') ev.preventDefault();
+            if (typeof last.focus === 'function') last.focus();
+          }
+        } else if (document.activeElement === last || !focusables.includes(document.activeElement)) {
+          if (typeof ev.preventDefault === 'function') ev.preventDefault();
+          if (typeof first.focus === 'function') first.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', ptms._modalKeyHandler);
+
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const errBox = $('ptms-modal-error');
-      const btn = form.querySelector('button[type="submit"]');
+      const btn = form.querySelector ? form.querySelector('button[type="submit"]') : null;
       if (errBox) errBox.hidden = true;
       if (btn) btn.disabled = true;
       try {
@@ -870,49 +1066,151 @@
 
   function closeModal() {
     const host = $('ptms-modal-host');
-    if (!host) return;
-    host.hidden = true;
-    host.innerHTML = '';
+    if (ptms._modalKeyHandler) {
+      document.removeEventListener('keydown', ptms._modalKeyHandler);
+      ptms._modalKeyHandler = null;
+    }
+    if (host) {
+      host.hidden = true;
+      host.innerHTML = '';
+    }
+    const prev = ptms.lastFocusedEl;
+    ptms.lastFocusedEl = null;
+    if (prev && typeof prev.focus === 'function' && prev.isConnected !== false) {
+      prev.focus();
+    }
   }
 
   function openInitModal(bundle) {
     const { account, portfolio } = bundle;
     const td = currentTodayDate(account.market);
     const curLabel = CURRENCY_NAMES[account.currency] || account.currency;
+    const digits = account.market === 'US' ? 2 : 4;
     const rows = portfolio.positions.map((p) => `
       <tr>
-        <td><strong>${esc(p.name)}</strong> (${esc(p.symbol)})</td>
-        <td><input type="number" step="any" min="0" name="qty_${esc(p.symbol)}" value="0" /></td>
-        <td><input type="number" step="any" min="0" name="px_${esc(p.symbol)}" value="${p.mark_price != null ? esc(p.mark_price) : '1.0'}" /></td>
+        <td><strong>${esc(p.name)}</strong><br><small>${esc(p.symbol)}</small></td>
+        <td>${p.mark_price != null ? fmtNum(p.mark_price, digits) : '<small class="text-red">暂无行情</small>'}</td>
+        <td><input type="number" step="any" min="0" name="qty_${esc(p.symbol)}" value="" placeholder="0" /></td>
+        <td><input type="number" step="any" min="0" name="px_${esc(p.symbol)}" value="" placeholder="${p.mark_price != null ? '参考 ' + esc(p.mark_price) : '请填真实成本价'}" /></td>
       </tr>
     `).join('');
-    openModal(`初始化持仓 · ${accountName(account.account_id)}（${curLabel}）`, `
+    openModal(`初始化实盘账户 · ${accountName(account.account_id)}（${curLabel}）`, `
+      <div class="ptms-alert warn">请按券商当前真实余额填写，系统不再自动预填 100,000 现金或 1.0 成本价。若仅有现金，持仓股数留空或填 0 即可。</div>
       <div class="ptms-form-grid">
         <div class="ptms-field"><label>建账日期</label><input type="date" name="trade_date" value="${esc(td)}" required /></div>
-        <div class="ptms-field"><label>初始可用现金（${esc(curLabel)}）</label><input type="number" step="any" min="0" name="cash" value="100000" required /></div>
+        <div class="ptms-field"><label>真实可用现金（${esc(curLabel)}）</label><input type="number" step="any" min="0" name="cash" value="" placeholder="请输入真实可用现金，例如 50000" required /></div>
         <div class="ptms-field full">
-          <label>已有持仓（若目前全仓现金可全部保持 0）</label>
-          <div class="table-wrap"><table><thead><tr><th>标的</th><th>持有股数</th><th>持仓成本价</th></tr></thead><tbody>${rows}</tbody></table></div>
+          <label>已有持仓（有股数时必须填写对应真实成本价）</label>
+          <div class="table-wrap"><table><thead><tr><th>标的</th><th>当前参考价</th><th>实际持有股数</th><th>持仓成本均价</th></tr></thead><tbody>${rows}</tbody></table></div>
         </div>
-        <div class="ptms-field full"><label>备注</label><input name="note" value="账户初始建账" /></div>
+        <div class="ptms-field full">
+          <div id="ptms-init-summary" class="ptms-summary-box">
+            <strong>建账前汇总确认（实盘账户）</strong>
+            <div class="ptms-summary-grid">
+              <div><span>初始可用现金</span><b>0.00 ${esc(curLabel)}</b></div>
+              <div><span>录入持仓市值</span><b>0.00 ${esc(curLabel)}</b></div>
+              <div><span>预计初始总资产</span><b>0.00 ${esc(curLabel)}</b></div>
+            </div>
+          </div>
+        </div>
+        <div class="ptms-field full"><label>备注</label><input name="note" value="实盘账户初始建账" /></div>
       </div>
       <div class="ptms-modal-foot">
         <button type="button" class="ghost-button" data-ptms-close="1">取消</button>
-        <button type="submit" class="solid-button">确认初始化</button>
+        <button type="submit" class="solid-button">确认实盘建账</button>
       </div>
     `, async (form) => {
       const fd = new FormData(form);
-      const positions = portfolio.positions.map((p) => ({
-        symbol: p.symbol,
-        quantity: Number(fd.get(`qty_${p.symbol}`) || 0),
-        price: Number(fd.get(`px_${p.symbol}`) || 0),
-      })).filter((x) => x.quantity > 0);
+      const rawCash = String(fd.get('cash') ?? '').trim();
+      if (rawCash === '' || !Number.isFinite(Number(rawCash)) || Number(rawCash) < 0) {
+        throw new Error('请输入有效的真实可用现金（可为 0，不能留空或负数）');
+      }
+      const cashVal = Number(rawCash);
+      const positions = [];
+      for (const p of portfolio.positions) {
+        const qtyVal = Number(fd.get(`qty_${p.symbol}`) || 0);
+        if (qtyVal > 0) {
+          const rawPx = String(fd.get(`px_${p.symbol}`) ?? '').trim();
+          const pxVal = Number(rawPx);
+          if (rawPx === '' || !Number.isFinite(pxVal) || pxVal <= 0) {
+            throw new Error(`请输入 ${p.name} (${p.symbol}) 的真实持仓成本均价（必须大于 0）`);
+          }
+          positions.push({ symbol: p.symbol, quantity: qtyVal, price: pxVal });
+        }
+      }
+      if (cashVal <= 0 && !positions.length) {
+        throw new Error('初始可用现金与初始持仓不能同时为 0');
+      }
       const res = await apiPost('/api/ptms/ledger/init', {
         account_id: account.account_id,
+        account_mode: 'REAL',
         trade_date: fd.get('trade_date'),
-        cash: Number(fd.get('cash') || 0),
+        cash: cashVal,
         positions,
         note: fd.get('note'),
+      });
+      ptms.stateData = res.state;
+      ptms.reviewAccountId = null;
+      renderCurrentPtmsView();
+    });
+
+    const form = $('ptms-modal-form');
+    const summaryBox = $('ptms-init-summary');
+    if (form && summaryBox) {
+      const refreshSummary = () => {
+        const fd = new FormData(form);
+        const cashVal = Math.max(0, Number(fd.get('cash') || 0));
+        let holdingsCostVal = 0;
+        let nonZeroCount = 0;
+        for (const p of portfolio.positions) {
+          const q = Math.max(0, Number(fd.get(`qty_${p.symbol}`) || 0));
+          const px = Math.max(0, Number(fd.get(`px_${p.symbol}`) || 0));
+          if (q > 0) {
+            nonZeroCount += 1;
+            holdingsCostVal += q * px;
+          }
+        }
+        const totalEst = cashVal + holdingsCostVal;
+        summaryBox.innerHTML = `
+          <strong>建账前汇总确认（实盘账户 · ${nonZeroCount} 只非零持仓）</strong>
+          <div class="ptms-summary-grid">
+            <div><span>初始可用现金</span><strong>${fmtNum(cashVal)} ${esc(curLabel)}</strong></div>
+            <div><span>录入持仓总值</span><strong>${fmtNum(holdingsCostVal)} ${esc(curLabel)}</strong></div>
+            <div><span>预计初始总资产</span><strong>${fmtNum(totalEst)} ${esc(curLabel)}</strong></div>
+          </div>
+        `;
+      };
+      form.addEventListener('input', refreshSummary);
+    }
+  }
+
+  function openLoadDemoModal(bundle) {
+    const { account } = bundle;
+    const td = currentTodayDate(account.market);
+    const curLabel = CURRENCY_NAMES[account.currency] || account.currency;
+    const sampleCash = account.market === 'CN' ? 100000 : 20000;
+    openModal(`载入示例账户（仅作体验演示）· ${accountName(account.account_id)}`, `
+      <div class="ptms-alert warn">示例账户用于体验策略信号、调仓清单与复盘流程，账户栏将始终标注「示例账户（非实盘）」。</div>
+      <div class="ptms-summary-box">
+        <strong>将写入以下示例初始化资金：</strong>
+        <div class="ptms-summary-grid">
+          <div><span>账户类型</span><strong>示例账户</strong></div>
+          <div><span>演示可用现金</span><strong>${fmtNum(sampleCash)} ${esc(curLabel)}</strong></div>
+          <div><span>建账日期</span><strong>${esc(td)}</strong></div>
+        </div>
+      </div>
+      <div class="ptms-modal-foot">
+        <button type="button" class="ghost-button" data-ptms-close="1">取消</button>
+        <button type="submit" class="solid-button">确认载入示例</button>
+      </div>
+    `, async () => {
+      const res = await apiPost('/api/ptms/ledger/init', {
+        account_id: account.account_id,
+        account_mode: 'DEMO',
+        trade_date: td,
+        cash: sampleCash,
+        positions: [],
+        note: '载入系统示例账户（仅作体验演示）',
       });
       ptms.stateData = res.state;
       ptms.reviewAccountId = null;
@@ -923,6 +1221,7 @@
   function openEventModal(bundle) {
     const { account, portfolio } = bundle;
     const td = currentTodayDate(account.market);
+    const clientRequestId = newClientRequestId('ev');
     const symOpts = portfolio.positions.map((p) => `<option value="${esc(p.symbol)}">${esc(p.name)} (${esc(p.symbol)})</option>`).join('');
     openModal(`记一笔交易 / 资金变动 · ${accountName(account.account_id)}`, `
       <div class="ptms-form-grid">
@@ -963,6 +1262,7 @@
         amount: Number(fd.get('amount') || 0),
         discipline_tag: fd.get('discipline_tag'),
         note: fd.get('note'),
+        client_request_id: clientRequestId,
       });
       ptms.stateData = res.state;
       ptms.reviewAccountId = null;
@@ -1062,22 +1362,38 @@
       openModal(`计划 #${ticket.decision_id} 无需下单`, '<p>该调仓计划没有具体的买卖笔数，可直接标记为暂不执行。</p><div class="ptms-modal-foot"><button type="button" class="ghost-button" data-ptms-close="1">关闭</button></div>', async () => {});
       return;
     }
+    const prog = ticket.progress || {};
+    const legMap = new Map((prog.legs || []).map((l) => [`${l.symbol}:${l.side}`, l]));
+    const clientRequestId = newClientRequestId(`exec_${ticket.decision_id}`);
     const defaultTag = ticket.source === 'INTRADAY_STOP' ? 'RISK_CUT' : 'FOLLOW';
-    const rows = orders.map((o, idx) => `
-      <tr>
-        <td><span class="ptms-badge ${o.side === 'BUY' ? 'green' : 'red'}">${o.side === 'BUY' ? '买' : '卖'}</span> ${esc(o.name)}</td>
-        <td><input type="number" step="any" min="0" name="qty_${idx}" value="${o.quantity}" /></td>
-        <td><input type="number" step="any" min="0" name="px_${idx}" value="${o.ref_price}" /></td>
-        <td><input type="number" step="any" min="0" name="fee_${idx}" value="${o.est_fee}" /></td>
-      </tr>
-    `).join('');
+    const rows = orders.map((o, idx) => {
+      const leg = legMap.get(`${o.symbol}:${o.side}`);
+      const remQty = leg ? Number(leg.remaining_qty) : Number(o.quantity);
+      const filledQty = leg ? Number(leg.filled_qty) : 0;
+      return `
+        <tr>
+          <td><span class="ptms-badge ${o.side === 'BUY' ? 'green' : 'red'}">${o.side === 'BUY' ? '买' : '卖'}</span> <strong>${esc(o.name)}</strong><br><small>${esc(o.symbol)}</small></td>
+          <td>建议 ${fmtNum(o.quantity, o.lot_size > 1 ? 0 : 2)}<br><small>已成 ${fmtNum(filledQty, o.lot_size > 1 ? 0 : 2)} · <strong>剩余 ${fmtNum(remQty, o.lot_size > 1 ? 0 : 2)}</strong></small></td>
+          <td>${fmtNum(o.ref_price, account.market === 'US' ? 2 : 4)}</td>
+          <td><input type="number" step="any" min="0" name="qty_${idx}" value="" placeholder="剩余 ${remQty}" data-fill-qty="${remQty}" /></td>
+          <td><input type="number" step="any" min="0" name="px_${idx}" value="" placeholder="参考 ${o.ref_price}" data-fill-px="${o.ref_price}" /></td>
+          <td><input type="number" step="any" min="0" name="fee_${idx}" value="0" data-fill-fee="${remQty === Number(o.quantity) ? o.est_fee : 0}" /></td>
+        </tr>
+      `;
+    }).join('');
     openModal(`确认成交并记入账本 · 计划 #${ticket.decision_id}`, `
       <div class="ptms-alert ok">${esc(ticket.reason)}</div>
       <div class="ptms-form-grid">
         <div class="ptms-field"><label>实际成交日期</label><input type="date" name="trade_date" value="${esc(td)}" required /></div>
         <div class="ptms-field"><label>执行方式标记</label><select name="discipline_tag">${Object.entries(DISCIPLINE_LABELS).map(([k, v]) => `<option value="${k}" ${k === defaultTag ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
-        <div class="ptms-field full"><div class="table-wrap"><table><thead><tr><th>方向 / 标的</th><th>实际成交股数</th><th>实际成交均价</th><th>实际费用</th></tr></thead><tbody>${rows}</tbody></table></div></div>
-        <div class="ptms-field full"><label>执行备注</label><input name="review_note" value="按计划 #${ticket.decision_id} 确认成交" /></div>
+        <div class="ptms-field full">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <label style="margin:0">请填写券商实际成交结果（支持部分成交，提交后未成交余量仍保留待办）</label>
+            <button type="button" class="ghost-button ptms-mini-btn" data-ptms-action="fill-ticket-remaining">按剩余建议量与参考价填入</button>
+          </div>
+          <div class="table-wrap"><table><thead><tr><th>方向 / 标的</th><th>建议 / 剩余股数</th><th>参考价</th><th>实际成交股数</th><th>实际成交均价</th><th>实际费用</th></tr></thead><tbody>${rows}</tbody></table></div>
+        </div>
+        <div class="ptms-field full"><label>执行备注</label><input name="review_note" value="按计划 #${ticket.decision_id} 录入成交" /></div>
       </div>
       <div class="ptms-modal-foot">
         <button type="button" class="ghost-button" data-ptms-close="1">取消</button>
@@ -1085,13 +1401,27 @@
       </div>
     `, async (form) => {
       const fd = new FormData(form);
-      const fills = orders.map((o, idx) => ({
-        symbol: o.symbol,
-        side: o.side,
-        quantity: Number(fd.get(`qty_${idx}`) || 0),
-        price: Number(fd.get(`px_${idx}`) || 0),
-        fee: Number(fd.get(`fee_${idx}`) || 0),
-      })).filter((f) => f.quantity > 0);
+      const fills = [];
+      orders.forEach((o, idx) => {
+        const qty = Number(fd.get(`qty_${idx}`) || 0);
+        if (qty > 0) {
+          const rawPx = String(fd.get(`px_${idx}`) ?? '').trim();
+          const px = Number(rawPx);
+          if (rawPx === '' || !Number.isFinite(px) || px <= 0) {
+            throw new Error(`请填写 ${o.name} 的实际成交均价（不能留空或小于等于 0）`);
+          }
+          fills.push({
+            symbol: o.symbol,
+            side: o.side,
+            quantity: qty,
+            price: px,
+            fee: Number(fd.get(`fee_${idx}`) || 0),
+          });
+        }
+      });
+      if (!fills.length) {
+        throw new Error('请至少填写一笔大于 0 的实际成交股数');
+      }
       const res = await apiPost('/api/ptms/decisions/execute', {
         account_id: account.account_id,
         decision_id: ticket.decision_id,
@@ -1099,11 +1429,209 @@
         fills,
         discipline_tag: fd.get('discipline_tag'),
         review_note: fd.get('review_note'),
+        client_request_id: clientRequestId,
       });
       ptms.stateData = res.state;
       ptms.reviewAccountId = null;
       renderCurrentPtmsView();
     });
+  }
+
+  function openCancelRemainderModal(bundle, ticket) {
+    const prog = ticket.progress || {};
+    openModal(`取消未成交余量 · 计划 #${ticket.decision_id}`, `
+      <div class="ptms-alert warn">当前计划已完成 ${fmtNum(prog.filled_shares, 0)} / ${fmtNum(prog.planned_shares, 0)} 股，取消余量后将关闭本笔待办（剩余 ${fmtNum(prog.remaining_shares, 0)} 股不再计入待执行），已入账成交保留不变。</div>
+      <div class="ptms-form-grid">
+        <div class="ptms-field full"><label>取消余量原因</label><textarea name="review_note" required placeholder="例如：价格偏离过多，放弃剩余未成交部分"></textarea></div>
+      </div>
+      <div class="ptms-modal-foot">
+        <button type="button" class="ghost-button" data-ptms-close="1">返回</button>
+        <button type="submit" class="ptms-danger-btn">确认取消余量</button>
+      </div>
+    `, async (form) => {
+      const fd = new FormData(form);
+      const res = await apiPost('/api/ptms/decisions/cancel-remainder', {
+        account_id: bundle.account.account_id,
+        decision_id: ticket.decision_id,
+        review_note: fd.get('review_note'),
+      });
+      ptms.stateData = res.state;
+      ptms.reviewAccountId = null;
+      renderCurrentPtmsView();
+    });
+  }
+
+  function openReverseEventModal(bundle, eventObj) {
+    openModal(`冲正账本流水 · #${eventObj.event_id}`, `
+      <div class="ptms-alert warn">将生成一笔反向抵消流水冲正 #${eventObj.event_id}（${esc(EVENT_LABELS[eventObj.event_type] || eventObj.event_type)}${eventObj.symbol ? ' · ' + esc(eventObj.symbol) : ''}），历史记录完整保留，如关联计划票据也会同步重算未成交余量。</div>
+      <div class="ptms-form-grid">
+        <div class="ptms-field full"><label>冲正原因（必填，审计留痕）</label><input name="reason" required placeholder="例如：手工误录股数或成交价格，冲正后重新录入" /></div>
+      </div>
+      <div class="ptms-modal-foot">
+        <button type="button" class="ghost-button" data-ptms-close="1">取消</button>
+        <button type="submit" class="ptms-danger-btn">确认冲正</button>
+      </div>
+    `, async (form) => {
+      const fd = new FormData(form);
+      const res = await apiPost('/api/ptms/ledger/reverse', {
+        account_id: bundle.account.account_id,
+        event_id: eventObj.event_id,
+        reason: fd.get('reason'),
+      });
+      ptms.stateData = res.state;
+      ptms.reviewAccountId = null;
+      renderCurrentPtmsView();
+    });
+  }
+
+  function openImportModal(bundle) {
+    const { account } = bundle;
+    openModal(`导入券商对账单 (CSV) · ${accountName(account.account_id)}`, `
+      <div class="ptms-alert warn">支持常见 A股/美股券商成交流水 CSV（含成交日期、证券代码、买卖标志、成交数量、成交均价、手续费、成交编号）。自动按成交编号去重，并先预览现金与持仓变化，确认后才写账。</div>
+      <div class="ptms-form-grid">
+        <div class="ptms-field full"><label>选择 CSV 文件（支持 UTF-8 或 GB18030）</label><input type="file" id="ptms-import-file" accept=".csv,text/csv" /></div>
+        <div class="ptms-field full"><label>或直接粘贴 CSV 内容</label><textarea id="ptms-import-text" name="csv_text" placeholder="成交日期,证券代码,买卖标志,成交数量,成交均价,手续费,成交编号"></textarea></div>
+        <div class="ptms-field full">
+          <div class="ptms-actions-row">
+            <button type="button" class="ghost-button" id="ptms-import-preview-btn">第一步：解析并预览差异</button>
+          </div>
+        </div>
+        <div class="ptms-field full" id="ptms-import-preview-box"></div>
+      </div>
+      <div class="ptms-modal-foot">
+        <button type="button" class="ghost-button" data-ptms-close="1">取消</button>
+        <button type="submit" class="solid-button" id="ptms-import-commit-btn" disabled>第二步：确认写入账本</button>
+      </div>
+    `, async (form) => {
+      const fd = new FormData(form);
+      const csvText = String(fd.get('csv_text') || '').trim();
+      if (!csvText) throw new Error('请先选择或粘贴对账单 CSV 内容');
+      const res = await apiPost('/api/ptms/import/commit', {
+        account_id: account.account_id,
+        csv_text: csvText,
+        ignore_t_plus: true,
+      });
+      ptms.stateData = res.state;
+      ptms.reviewAccountId = null;
+      renderCurrentPtmsView();
+    });
+
+    const fileInput = $('ptms-import-file');
+    const textEl = $('ptms-import-text');
+    const previewBtn = $('ptms-import-preview-btn');
+    const previewBox = $('ptms-import-preview-box');
+    const commitBtn = $('ptms-import-commit-btn');
+    const errBox = $('ptms-modal-error');
+    if (fileInput && textEl) {
+      fileInput.addEventListener('change', async () => {
+        const f = fileInput.files && fileInput.files[0];
+        if (!f) return;
+        textEl.value = await readFileSmartText(f, 'gb18030');
+        if (previewBox) previewBox.innerHTML = '';
+        if (commitBtn) commitBtn.disabled = true;
+      });
+    }
+    if (previewBtn && textEl && previewBox) {
+      previewBtn.addEventListener('click', async () => {
+        if (errBox) errBox.hidden = true;
+        try {
+          const data = await apiPost('/api/ptms/import/preview', {
+            account_id: account.account_id,
+            csv_text: textEl.value,
+          });
+          const pv = data.preview;
+          const posDiffHtml = (pv.position_diffs || []).length
+            ? pv.position_diffs.map((p) => `<li>${esc(p.name)} (${esc(p.symbol)}): ${fmtNum(p.before_shares, 2)} → <strong>${fmtNum(p.after_shares, 2)}</strong> (${p.delta_shares >= 0 ? '+' : ''}${fmtNum(p.delta_shares, 2)})</li>`).join('')
+            : '<li>持仓股数无新增变化</li>';
+          const rowNotes = (pv.rows || []).filter((r) => r.status === 'ERROR' || r.status === 'IGNORED' || r.status === 'DUPLICATE').slice(0, 6)
+            .map((r) => `<li>第 ${r.row_no} 行 [${r.status === 'ERROR' ? '格式错误' : r.status === 'DUPLICATE' ? '重复跳过' : '池外跳过'}]: ${esc(r.error || r.reason || r.symbol)}</li>`).join('');
+          previewBox.innerHTML = `
+            <div class="ptms-summary-box">
+              <strong>预览结果：新增 ${pv.counts.new} 笔 · 重复跳过 ${pv.counts.duplicate} 笔 · 池外跳过 ${pv.counts.ignored} 笔 · 错误 ${pv.counts.error} 笔</strong>
+              <div class="ptms-summary-grid">
+                <div><span>导入前现金</span><strong>${fmtNum(pv.cash_before)}</strong></div>
+                <div><span>导入后现金</span><strong>${fmtNum(pv.cash_after)}</strong></div>
+                <div><span>现金净变动</span><strong>${pv.cash_delta >= 0 ? '+' : ''}${fmtNum(pv.cash_delta)}</strong></div>
+              </div>
+              <ul style="margin:4px 0 0;padding-left:18px;font-size:11px">${posDiffHtml}${rowNotes}</ul>
+            </div>
+          `;
+          if (commitBtn) commitBtn.disabled = pv.counts.error > 0 || pv.counts.new === 0;
+        } catch (err) {
+          if (errBox) {
+            errBox.textContent = String(err.message || err);
+            errBox.hidden = false;
+          }
+          if (commitBtn) commitBtn.disabled = true;
+        }
+      });
+    }
+  }
+
+  function openRestoreModal() {
+    openModal('从完整备份恢复账本数据库', `
+      <div class="ptms-alert warn">全量恢复将校检 SHA-256 校验和后覆盖当前所有账本流水、账户设置、待办票据、风控状态、复盘笔记与提醒记录，请先确认预览结果。</div>
+      <div class="ptms-form-grid">
+        <div class="ptms-field full"><label>选择完整备份 JSON 文件</label><input type="file" id="ptms-restore-file" accept=".json,application/json" /></div>
+        <div class="ptms-field full"><label>或粘贴备份 JSON 内容</label><textarea id="ptms-restore-text" name="backup_json" placeholder='{"schema_version":2,...}'></textarea></div>
+        <div class="ptms-field full"><button type="button" class="ghost-button" id="ptms-restore-preview-btn">第一步：校验备份并预览表数量</button></div>
+        <div class="ptms-field full" id="ptms-restore-preview-box"></div>
+      </div>
+      <div class="ptms-modal-foot">
+        <button type="button" class="ghost-button" data-ptms-close="1">取消</button>
+        <button type="submit" class="ptms-danger-btn" id="ptms-restore-commit-btn" disabled>第二步：确认覆盖恢复</button>
+      </div>
+    `, async (form) => {
+      const fd = new FormData(form);
+      const parsed = JSON.parse(String(fd.get('backup_json') || '{}'));
+      const res = await apiPost('/api/ptms/restore', { backup: parsed });
+      ptms.stateData = res.state;
+      ptms.reviewAccountId = null;
+      renderCurrentPtmsView();
+    });
+
+    const fileInput = $('ptms-restore-file');
+    const textEl = $('ptms-restore-text');
+    const previewBtn = $('ptms-restore-preview-btn');
+    const previewBox = $('ptms-restore-preview-box');
+    const commitBtn = $('ptms-restore-commit-btn');
+    const errBox = $('ptms-modal-error');
+    if (fileInput && textEl) {
+      fileInput.addEventListener('change', async () => {
+        const f = fileInput.files && fileInput.files[0];
+        if (!f) return;
+        textEl.value = await readFileSmartText(f, 'utf-8');
+        if (previewBox) previewBox.innerHTML = '';
+        if (commitBtn) commitBtn.disabled = true;
+      });
+    }
+    if (previewBtn && textEl && previewBox) {
+      previewBtn.addEventListener('click', async () => {
+        if (errBox) errBox.hidden = true;
+        try {
+          const parsed = JSON.parse(textEl.value || '{}');
+          const data = await apiPost('/api/ptms/restore/preview', { backup: parsed });
+          const pv = data.preview;
+          previewBox.innerHTML = `
+            <div class="ptms-summary-box">
+              <strong>校验通过（导出时间：${esc(pv.exported_at || '—')} · SHA256：${esc(String(pv.payload_sha256 || '').slice(0, 12))}）</strong>
+              <div class="ptms-summary-grid">
+                <div><span>账户配置 / 流水</span><strong>${pv.counts.accounts} / ${pv.counts.ledger_events}</strong></div>
+                <div><span>决策票据 / 止损状态</span><strong>${pv.counts.decision_tickets} / ${pv.counts.stop_states}</strong></div>
+                <div><span>复盘笔记 / 提醒记录</span><strong>${pv.counts.review_notes} / ${pv.counts.notifications}</strong></div>
+              </div>
+            </div>
+          `;
+          if (commitBtn) commitBtn.disabled = false;
+        } catch (err) {
+          if (errBox) {
+            errBox.textContent = String(err.message || err);
+            errBox.hidden = false;
+          }
+          if (commitBtn) commitBtn.disabled = true;
+        }
+      });
+    }
   }
 
   function openSkipTicketModal(bundle, ticket) {
@@ -1152,37 +1680,104 @@
   }
 
   async function handleAction(target) {
-    const accountTab = target.closest('[data-ptms-account]');
+    if (target && target.id === 'ptms-modal-host') {
+      closeModal();
+      return;
+    }
+    const accountTab = target.closest ? target.closest('[data-ptms-account]') : null;
     if (accountTab) {
       ptms.accountId = accountTab.dataset.ptmsAccount;
+      ptms.notifOpen = false;
       writeStorage(STORAGE_KEY, ptms.accountId);
       renderCurrentPtmsView();
       if (ptms.currentView === 'review') loadReview(ptms.accountId);
       return;
     }
-    if (target.closest('[data-ptms-close]')) {
+    if (target.closest && target.closest('[data-ptms-close]')) {
       closeModal();
       return;
     }
-    const btn = target.closest('[data-ptms-action]');
-    if (!btn) return;
+    const btn = target.closest ? target.closest('[data-ptms-action]') : null;
+    if (!btn) {
+      if (ptms.notifOpen && !(target.closest && target.closest('.ptms-notif-wrap'))) {
+        ptms.notifOpen = false;
+        renderCurrentPtmsView();
+      }
+      return;
+    }
     const action = btn.dataset.ptmsAction;
+    if (action === 'toggle-notifs') {
+      ptms.notifOpen = !ptms.notifOpen;
+      renderCurrentPtmsView();
+      return;
+    }
+    if (action === 'read-all-notifs') {
+      const res = await apiPost('/api/ptms/notifications/read', {});
+      if (ptms.stateData) {
+        ptms.stateData.notifications = res.notifications;
+        ptms.stateData.unread_notifications = res.unread_notifications;
+      }
+      renderCurrentPtmsView();
+      return;
+    }
+    if (action === 'click-notif') {
+      const nid = Number(btn.dataset.notifId);
+      const aid = btn.dataset.notifAccount;
+      if (nid) {
+        const res = await apiPost('/api/ptms/notifications/read', { notification_ids: [nid] });
+        if (ptms.stateData) {
+          ptms.stateData.notifications = res.notifications;
+          ptms.stateData.unread_notifications = res.unread_notifications;
+        }
+      }
+      ptms.notifOpen = false;
+      if (aid && ptms.stateData?.accounts?.[aid]) {
+        ptms.accountId = aid;
+        writeStorage(STORAGE_KEY, aid);
+      }
+      if (typeof window.__quantlabNavTo === 'function') window.__quantlabNavTo('desk');
+      else renderCurrentPtmsView();
+      return;
+    }
+    if (action === 'fill-ticket-remaining') {
+      const form = $('ptms-modal-form');
+      if (form && form.querySelectorAll) {
+        form.querySelectorAll('[data-fill-qty]').forEach((el) => { el.value = el.dataset.fillQty || ''; });
+        form.querySelectorAll('[data-fill-px]').forEach((el) => { el.value = el.dataset.fillPx || ''; });
+        form.querySelectorAll('[data-fill-fee]').forEach((el) => { el.value = el.dataset.fillFee || '0'; });
+      }
+      return;
+    }
     const bundle = activeBundle();
     if (action === 'reload-state') {
       await loadPtmsState();
       if (ptms.currentView === 'review') await loadReview(ptms.accountId);
       return;
     }
+    if (action === 'open-restore') {
+      openRestoreModal();
+      return;
+    }
     if (!bundle) return;
     if (action === 'open-init') openInitModal(bundle);
+    else if (action === 'open-load-demo') openLoadDemoModal(bundle);
+    else if (action === 'open-import') openImportModal(bundle);
     else if (action === 'open-event') openEventModal(bundle);
     else if (action === 'open-reconcile') openReconcileModal(bundle);
     else if (action === 'open-config') openConfigModal(bundle);
     else if (action === 'open-reset-stop') openResetStopModal(bundle, btn.dataset.symbol);
-    else if (action === 'open-execute-ticket') {
+    else if (action === 'open-reverse-event') {
+      const eid = Number(btn.dataset.eventId);
+      const evObj = (bundle.events || []).find((x) => x.event_id === eid);
+      if (evObj) openReverseEventModal(bundle, evObj);
+    } else if (action === 'open-execute-ticket') {
       const did = Number(btn.dataset.decisionId);
       const t = (bundle.tickets || []).find((x) => x.decision_id === did);
       if (t) openExecuteTicketModal(bundle, t);
+    } else if (action === 'open-cancel-remainder') {
+      const did = Number(btn.dataset.decisionId);
+      const t = (bundle.tickets || []).find((x) => x.decision_id === did);
+      if (t) openCancelRemainderModal(bundle, t);
     } else if (action === 'open-skip-ticket') {
       const did = Number(btn.dataset.decisionId);
       const t = (bundle.tickets || []).find((x) => x.decision_id === did);
@@ -1196,7 +1791,7 @@
       renderCurrentPtmsView();
     } else if (action === 'execute-current-plan') {
       let ticket = (bundle.tickets || []).find(
-        (t) => t.status === 'PENDING' && t.source === 'WEEKLY_REBALANCE' && t.signal_cutoff === bundle.plan.signal_cutoff
+        (t) => (t.status === 'PENDING' || t.status === 'PARTIAL') && t.source === 'WEEKLY_REBALANCE' && t.signal_cutoff === bundle.plan.signal_cutoff
       );
       if (!ticket) {
         const res = await apiPost('/api/ptms/decisions/create', {

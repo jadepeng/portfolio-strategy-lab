@@ -65,3 +65,29 @@ class EfinanceProvider(PublicProvider):
         if interval == '1d' and not adjusted:
             self._daily_raw[symbol] = result
         return result
+
+    def tape(self):
+        from live.market import collect
+
+        fields = {'market': '1.000985', 'tech': '0.399006', 'star': '1.000688', 'red': '1.000922'}
+
+        def one(key):
+            secid = fields[key]
+            code = secid.split('.', 1)[1]
+            raw = self.ef.stock.get_quote_history(
+                secid,
+                beg='20200101',
+                end='20500101',
+                klt=101,
+                fqt=0,
+                quote_id_mode=True,
+            )
+            f = eastmoney_frame(raw, interval='1d', code=code)
+            if 'turnover' not in f or f['turnover'].isna().any() or (f['turnover'] <= 0).any():
+                raise ValueError('index turnover unavailable: ' + key)
+            return f[['close', 'turnover']]
+
+        values, errors = collect(fields, one)
+        if errors:
+            raise ValueError('指数成交额缺失：' + ', '.join(errors))
+        return values

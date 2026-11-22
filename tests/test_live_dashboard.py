@@ -284,3 +284,58 @@ def test_public_provider_avoids_yfinance_raise_errors_deprecation(monkeypatch):
     assert 'raise_errors' not in captured['kwargs']
     assert yf.config.debug.hide_exceptions is False
     assert not any(issubclass(w.category, DeprecationWarning) for w in caught)
+
+
+def test_weekly_prices_tolerates_single_day_halt_and_fails_closed_on_missing_week(clock):
+    from live.store import market_symbols
+
+    dates = pd.bdate_range('2025-10-06', '2026-11-20')
+    daily = {}
+    for idx, sym in enumerate(market_symbols('CN')):
+        close = pd.Series(np.linspace(1.0 + idx * 0.2, 1.5 + idx * 0.2, len(dates)), index=dates)
+        open_ = close * 0.999
+        frame = pd.DataFrame({'open': open_, 'close': close})
+        daily[sym] = {'raw': frame.copy(), 'adjusted': frame.copy()}
+
+    # Single-day halt (2026-10-12 Monday missing on 159915.SZ only, rest of week present) succeeds
+    daily_one_day = deepcopy(daily)
+    daily_one_day['159915.SZ']['adjusted'] = daily_one_day['159915.SZ']['adjusted'].drop(pd.Timestamp('2026-10-12'))
+    p, op, cutoff = weekly_prices(daily_one_day, 'CN', clock, pd.Timestamp('2026-11-22T00:00Z'))
+    assert cutoff == '2026-11-20'
+    assert not p.isna().any().any() and not op.isna().any().any()
+
+    # Full-week gap on one asset must still fail closed
+    daily_full_week = deepcopy(daily)
+    drop_week = pd.date_range('2026-10-12', '2026-10-16', freq='B')
+    daily_full_week['159915.SZ']['adjusted'] = daily_full_week['159915.SZ']['adjusted'].drop(drop_week)
+    with pytest.raises(ValueError, match='资产周线缺失'):
+        weekly_prices(daily_full_week, 'CN', clock, pd.Timestamp('2026-11-22T00:00Z'))
+
+
+def test_efinance_provider_tape_uses_quote_history():
+    from live.efinance_provider import EfinanceProvider
+
+    calls = []
+
+    class DummyStock:
+        def get_quote_history(self, secid, **kwargs):
+            calls.append((secid, kwargs))
+            code = secid.split('.', 1)[1]
+            return pd.DataFrame({
+                '股票代码': [code, code],
+                '日期': ['2026-11-19', '2026-11-20'],
+                '开盘': [1000.0, 1010.0],
+                '收盘': [1010.0, 1020.0],
+                '成交额': [1e11, 1.1e11],
+            })
+
+    class DummyEf:
+        stock = DummyStock()
+
+    prov = EfinanceProvider.__new__(EfinanceProvider)
+    prov.ef = DummyEf()
+    prov._daily_raw = {}
+    tape = prov.tape()
+    assert set(tape) == {'market', 'tech', 'star', 'red'}
+    assert {secid for secid, _ in calls} == {'1.000985', '0.399006', '1.000688', '1.000922'}
+    assert all(kw.get('quote_id_mode') is True for _, kw in calls)

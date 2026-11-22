@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from datetime import datetime, timezone
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -87,6 +88,7 @@ INSTRUMENT_META: dict[str, dict[str, Any]] = {
 
 MARKET_TIMEZONES = {'CN': 'Asia/Shanghai', 'US': 'America/New_York'}
 VALID_STRATEGY_VERSIONS = ('baseline', 'advisory', 'blend25')
+VALID_ACCOUNT_MODES = ('REAL', 'DEMO')
 VALID_EVENT_TYPES = (
     'INIT_POSITION',
     'BUY',
@@ -103,6 +105,8 @@ VALID_DISCIPLINE_TAGS = (
     'RISK_CUT',
     'RECONCILE',
     'INIT',
+    'CORRECTION',
+    'IMPORT',
 )
 VALID_TICKET_SOURCES = ('WEEKLY_REBALANCE', 'INTRADAY_STOP', 'MANUAL')
 VALID_TICKET_STATUSES = ('PENDING', 'EXECUTED', 'PARTIAL', 'SKIPPED', 'EXPIRED')
@@ -275,10 +279,20 @@ def project_portfolio(
     total_dividends = 0.0
     net_capital_in = 0.0
 
-    ordered = sorted(
+    ordered_all = sorted(
         events,
         key=lambda e: (str(e['trade_date']), str(e['event_time']), int(e['event_id'])),
     )
+    reversed_ids = {
+        int(ev['reverses_event_id'])
+        for ev in ordered_all
+        if ev.get('reverses_event_id') is not None
+    }
+    ordered = [
+        ev
+        for ev in ordered_all
+        if int(ev['event_id']) not in reversed_ids and ev.get('reverses_event_id') is None
+    ]
 
     for ev in ordered:
         et = ev['event_type']
@@ -434,9 +448,11 @@ def project_portfolio(
         'account_id': account['account_id'],
         'market': market,
         'currency': account['currency'],
+        'account_mode': account.get('account_mode', 'REAL'),
         'as_of_date': today_local_date,
         'initialized': len(ordered) > 0,
-        'event_count': len(ordered),
+        'event_count': len(ordered_all),
+        'active_event_count': len(ordered),
         'cash': round(cash, 4),
         'cash_weight': round(cash_weight, 6),
         'holdings_value': round(holdings_value, 4),
@@ -451,6 +467,90 @@ def project_portfolio(
         'total_fees': round(total_fees, 4),
         'total_dividends': round(total_dividends, 4),
         'net_capital_in': round(net_capital_in, 4),
+    }
+
+
+def compute_ticket_progress(
+    ticket: dict[str, Any],
+    linked_events: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Compute per-leg and total fill completion for a decision ticket."""
+    reversed_ids = {
+        int(ev['reverses_event_id'])
+        for ev in linked_events
+        if ev.get('reverses_event_id') is not None
+    }
+    active = [
+        ev
+        for ev in linked_events
+        if int(ev['event_id']) not in reversed_ids
+        and ev.get('reverses_event_id') is None
+        and ev.get('event_type') in ('BUY', 'SELL')
+    ]
+
+    orders = (ticket.get('snapshot') or {}).get('orders') or []
+    legs: list[dict[str, Any]] = []
+    planned_shares = 0.0
+    filled_shares = 0.0
+    remaining_shares = 0.0
+    planned_notional = 0.0
+    filled_notional = 0.0
+    executed_notional = 0.0
+
+    for o in orders:
+        sym = str(o.get('symbol') or '').strip()
+        side = str(o.get('side') or '').upper()
+        p_qty = float(o.get('quantity') or 0.0)
+        ref_px = float(o.get('ref_price') or 0.0)
+        matched = [
+            ev for ev in active if ev.get('symbol') == sym and ev.get('event_type') == side
+        ]
+        f_qty = sum(float(ev.get('quantity') or 0.0) for ev in matched)
+        rem_qty = max(0.0, p_qty - f_qty)
+        if rem_qty <= 1e-6:
+            rem_qty = 0.0
+        capped_qty = min(p_qty, f_qty) if p_qty > 0 else 0.0
+        leg_exec = sum(float(ev.get('quantity') or 0.0) * float(ev.get('price') or 0.0) for ev in matched)
+
+        planned_shares += p_qty
+        filled_shares += f_qty
+        remaining_shares += rem_qty
+        planned_notional += p_qty * ref_px
+        filled_notional += capped_qty * ref_px
+        executed_notional += leg_exec
+
+        legs.append(
+            {
+                'symbol': sym,
+                'name': o.get('name', INSTRUMENT_META.get(sym, {}).get('name', sym)),
+                'side': side,
+                'lot_size': int(o.get('lot_size') or INSTRUMENT_META.get(sym, {}).get('lot_size', 1)),
+                'planned_qty': round(p_qty, 6),
+                'filled_qty': round(f_qty, 6),
+                'remaining_qty': round(rem_qty, 6),
+                'ref_price': round(ref_px, 4),
+            }
+        )
+
+    any_fill = len(active) > 0
+    all_filled = (len(legs) > 0 and all(leg['remaining_qty'] <= 1e-6 for leg in legs)) or (
+        len(legs) == 0 and any_fill
+    )
+    if planned_notional > 1e-9:
+        completion_pct = round(min(100.0, filled_notional / planned_notional * 100.0), 2)
+    else:
+        completion_pct = 100.0 if any_fill else 0.0
+
+    return {
+        'legs': legs,
+        'planned_shares': round(planned_shares, 6),
+        'filled_shares': round(filled_shares, 6),
+        'remaining_shares': round(remaining_shares, 6),
+        'planned_notional': round(planned_notional, 2),
+        'filled_notional': round(filled_notional, 2),
+        'executed_notional': round(executed_notional, 2),
+        'completion_pct': completion_pct,
+        'all_filled': bool(all_filled),
     }
 
 
@@ -497,6 +597,7 @@ class TradingStore:
                     account_id TEXT PRIMARY KEY,
                     market TEXT NOT NULL CHECK(market IN ('CN', 'US')),
                     currency TEXT NOT NULL CHECK(currency IN ('CNY', 'USD')),
+                    account_mode TEXT NOT NULL DEFAULT 'REAL' CHECK(account_mode IN ('REAL', 'DEMO')),
                     strategy_version TEXT NOT NULL DEFAULT 'baseline',
                     rebalance_deadband REAL NOT NULL,
                     core_floors_json TEXT NOT NULL,
@@ -519,6 +620,9 @@ class TradingStore:
                     decision_id INTEGER REFERENCES decision_tickets(decision_id),
                     discipline_tag TEXT NOT NULL DEFAULT 'FOLLOW',
                     note TEXT NOT NULL DEFAULT '',
+                    client_request_id TEXT,
+                    external_trade_id TEXT,
+                    reverses_event_id INTEGER REFERENCES ledger_events(event_id),
                     created_at TEXT NOT NULL
                 );
                 CREATE INDEX IF NOT EXISTS idx_ledger_account_date
@@ -570,6 +674,46 @@ class TradingStore:
                     created_at TEXT NOT NULL,
                     UNIQUE(account_id, period_type, period_key)
                 );
+
+                CREATE TABLE IF NOT EXISTS notifications (
+                    notification_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    account_id TEXT,
+                    event_key TEXT NOT NULL UNIQUE,
+                    category TEXT NOT NULL,
+                    severity TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    payload_json TEXT NOT NULL DEFAULT '{}',
+                    read_at TEXT,
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_notifications_created
+                    ON notifications(created_at DESC, notification_id DESC);
+                """
+            )
+            # Additive schema migrations for pre-existing personal_trading.db files
+            acc_cols = {r['name'] for r in conn.execute('PRAGMA table_info(accounts)').fetchall()}
+            if 'account_mode' not in acc_cols:
+                conn.execute("ALTER TABLE accounts ADD COLUMN account_mode TEXT NOT NULL DEFAULT 'REAL';")
+            ev_cols = {r['name'] for r in conn.execute('PRAGMA table_info(ledger_events)').fetchall()}
+            if 'client_request_id' not in ev_cols:
+                conn.execute('ALTER TABLE ledger_events ADD COLUMN client_request_id TEXT;')
+            if 'external_trade_id' not in ev_cols:
+                conn.execute('ALTER TABLE ledger_events ADD COLUMN external_trade_id TEXT;')
+            if 'reverses_event_id' not in ev_cols:
+                conn.execute('ALTER TABLE ledger_events ADD COLUMN reverses_event_id INTEGER REFERENCES ledger_events(event_id);')
+            conn.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_ledger_req_id
+                    ON ledger_events(account_id, client_request_id)
+                    WHERE client_request_id IS NOT NULL
+                """
+            )
+            conn.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_ledger_ext_id
+                    ON ledger_events(account_id, external_trade_id)
+                    WHERE external_trade_id IS NOT NULL
                 """
             )
         with self._tx() as conn:
@@ -578,9 +722,9 @@ class TradingStore:
                 conn.execute(
                     """
                     INSERT OR IGNORE INTO accounts (
-                        account_id, market, currency, strategy_version,
+                        account_id, market, currency, account_mode, strategy_version,
                         rebalance_deadband, core_floors_json, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, 'REAL', ?, ?, ?, ?)
                     """,
                     (
                         cfg['account_id'],
@@ -595,10 +739,12 @@ class TradingStore:
 
     @staticmethod
     def _row_to_account(row: sqlite3.Row) -> dict[str, Any]:
+        keys = row.keys()
         return {
             'account_id': row['account_id'],
             'market': row['market'],
             'currency': row['currency'],
+            'account_mode': row['account_mode'] if 'account_mode' in keys else 'REAL',
             'strategy_version': row['strategy_version'],
             'rebalance_deadband': float(row['rebalance_deadband']),
             'core_floors': json.loads(row['core_floors_json']),
@@ -638,12 +784,16 @@ class TradingStore:
         strategy_version: str | None = None,
         rebalance_deadband: float | None = None,
         core_floors: dict[str, Any] | None = None,
+        account_mode: str | None = None,
     ) -> dict[str, Any]:
         with self._tx() as conn:
             acc = self._fetch_account(conn, account_id)
             next_ver = acc['strategy_version'] if strategy_version is None else str(strategy_version)
             if next_ver not in VALID_STRATEGY_VERSIONS:
                 raise ValueError(f'无效策略版本: {next_ver}')
+            next_mode = acc.get('account_mode', 'REAL') if account_mode is None else str(account_mode).upper()
+            if next_mode not in VALID_ACCOUNT_MODES:
+                raise ValueError(f'无效账户模式: {next_mode}')
             if rebalance_deadband is None:
                 next_db = acc['rebalance_deadband']
             else:
@@ -660,10 +810,10 @@ class TradingStore:
             conn.execute(
                 """
                 UPDATE accounts
-                SET strategy_version = ?, rebalance_deadband = ?, core_floors_json = ?, updated_at = ?
+                SET account_mode = ?, strategy_version = ?, rebalance_deadband = ?, core_floors_json = ?, updated_at = ?
                 WHERE account_id = ?
                 """,
-                (next_ver, next_db, json.dumps(next_floors, ensure_ascii=False), stamp, account_id),
+                (next_mode, next_ver, next_db, json.dumps(next_floors, ensure_ascii=False), stamp, account_id),
             )
             return self._fetch_account(conn, account_id)
 
@@ -671,11 +821,16 @@ class TradingStore:
         self,
         account_id: str,
         *,
-        limit: int = 200,
+        limit: int | None = 200,
         event_type: str | None = None,
     ) -> list[dict[str, Any]]:
         with self._connect() as conn:
             self._fetch_account(conn, account_id)
+            rev_rows = conn.execute(
+                'SELECT reverses_event_id FROM ledger_events WHERE account_id = ? AND reverses_event_id IS NOT NULL',
+                (account_id,),
+            ).fetchall()
+            reversed_ids = {int(r['reverses_event_id']) for r in rev_rows}
             sql = 'SELECT * FROM ledger_events WHERE account_id = ?'
             params: list[Any] = [account_id]
             if event_type and event_type != 'ALL':
@@ -683,10 +838,17 @@ class TradingStore:
                     raise ValueError(f'无效事件类型: {event_type}')
                 sql += ' AND event_type = ?'
                 params.append(event_type)
-            sql += ' ORDER BY trade_date DESC, event_time DESC, event_id DESC LIMIT ?'
-            params.append(max(1, min(1000, int(limit))))
+            sql += ' ORDER BY trade_date DESC, event_time DESC, event_id DESC'
+            if limit is not None:
+                sql += ' LIMIT ?'
+                params.append(max(1, int(limit)))
             rows = conn.execute(sql, params).fetchall()
-            return [dict(r) for r in rows]
+            out = []
+            for r in rows:
+                d = dict(r)
+                d['is_reversed'] = int(d['event_id']) in reversed_ids
+                out.append(d)
+            return out
 
     def get_portfolio(
         self,
@@ -720,6 +882,9 @@ class TradingStore:
         note: str = '',
         ignore_t_plus: bool = False,
         today_local_date: str | None = None,
+        client_request_id: str | None = None,
+        external_trade_id: str | None = None,
+        reverses_event_id: int | None = None,
     ) -> int:
         if event_type not in VALID_EVENT_TYPES:
             raise ValueError(f'无效事件类型: {event_type}')
@@ -792,26 +957,27 @@ class TradingStore:
                 raise ValueError('对账现金差额无效')
 
         # Validate state invariants against current projected portfolio
-        cur_events = self._fetch_events(conn, acc['account_id'])
-        cur = project_portfolio(acc, cur_events, None, today_str)
+        if reverses_event_id is None:
+            cur_events = self._fetch_events(conn, acc['account_id'])
+            cur = project_portfolio(acc, cur_events, None, today_str)
 
-        if event_type == 'BUY':
-            need = -computed_cd
-            if cur['cash'] + 0.01 < need:
-                raise ValueError(f'可用现金不足：需要 {need:.2f}，当前可用 {cur["cash"]:.2f}')
-        elif event_type == 'CASH_OUT':
-            need = -computed_cd
-            if cur['cash'] + 0.01 < need:
-                raise ValueError(f'可用现金不足以出金：需要 {need:.2f}，当前可用 {cur["cash"]:.2f}')
-        elif event_type == 'SELL':
-            pos_item = next(p for p in cur['positions'] if p['symbol'] == clean_sym)
-            if qty > pos_item['shares'] + 1e-6:
-                raise ValueError(f'{clean_sym} 持仓不足：当前持有 {pos_item["shares"]:g} 股，尝试卖出 {qty:g} 股')
-            if not ignore_t_plus and qty > pos_item['sellable_shares'] + 1e-6:
-                raise ValueError(
-                    f'{clean_sym} 为 T+1 品种，今日仅可卖 {pos_item["sellable_shares"]:g} 股'
-                    f'（今日新买锁定 {pos_item["today_bought_shares"]:g} 股）'
-                )
+            if event_type == 'BUY':
+                need = -computed_cd
+                if cur['cash'] + 0.01 < need:
+                    raise ValueError(f'可用现金不足：需要 {need:.2f}，当前可用 {cur["cash"]:.2f}')
+            elif event_type == 'CASH_OUT':
+                need = -computed_cd
+                if cur['cash'] + 0.01 < need:
+                    raise ValueError(f'可用现金不足以出金：需要 {need:.2f}，当前可用 {cur["cash"]:.2f}')
+            elif event_type == 'SELL':
+                pos_item = next(p for p in cur['positions'] if p['symbol'] == clean_sym)
+                if qty > pos_item['shares'] + 1e-6:
+                    raise ValueError(f'{clean_sym} 持仓不足：当前持有 {pos_item["shares"]:g} 股，尝试卖出 {qty:g} 股')
+                if not ignore_t_plus and qty > pos_item['sellable_shares'] + 1e-6:
+                    raise ValueError(
+                        f'{clean_sym} 为 T+1 品种，今日仅可卖 {pos_item["sellable_shares"]:g} 股'
+                        f'（今日新买锁定 {pos_item["today_bought_shares"]:g} 股）'
+                    )
 
         if decision_id is not None:
             t_row = conn.execute(
@@ -821,14 +987,18 @@ class TradingStore:
             if t_row is None or t_row['account_id'] != acc['account_id']:
                 raise ValueError('关联决策票据不存在或不属于当前账户')
 
+        clean_req = str(client_request_id).strip() if client_request_id else None
+        clean_ext = str(external_trade_id).strip() if external_trade_id else None
+
         cur_ts = now_iso()
         cursor = conn.execute(
             """
             INSERT INTO ledger_events (
                 account_id, event_time, trade_date, event_type, symbol,
                 quantity, price, fee, cash_delta, decision_id,
-                discipline_tag, note, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                discipline_tag, note, client_request_id, external_trade_id,
+                reverses_event_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 acc['account_id'],
@@ -843,6 +1013,9 @@ class TradingStore:
                 int(decision_id) if decision_id is not None else None,
                 discipline_tag,
                 str(note or ''),
+                clean_req,
+                clean_ext,
+                int(reverses_event_id) if reverses_event_id is not None else None,
                 cur_ts,
             ),
         )
@@ -857,10 +1030,13 @@ class TradingStore:
         cash: float = 0.0,
         positions: list[dict[str, Any]] | dict[str, dict[str, Any]] | None = None,
         note: str = '账户初始化建账',
+        account_mode: str | None = None,
     ) -> dict[str, Any]:
         c_val = clean_float(cash)
         if c_val is None or c_val < 0:
             raise ValueError('初始现金不能为负数')
+        if account_mode is not None and str(account_mode).upper() not in VALID_ACCOUNT_MODES:
+            raise ValueError(f'无效账户模式: {account_mode}')
 
         pos_list: list[dict[str, Any]] = []
         if isinstance(positions, dict):
@@ -876,6 +1052,11 @@ class TradingStore:
             raise ValueError('初始现金与初始持仓不能同时为空')
 
         with self._tx() as conn:
+            if account_mode is not None:
+                conn.execute(
+                    'UPDATE accounts SET account_mode = ?, updated_at = ? WHERE account_id = ?',
+                    (str(account_mode).upper(), now_iso(), account_id),
+                )
             acc = self._fetch_account(conn, account_id)
             td = normalize_trade_date(trade_date)
             created_ids: list[int] = []
@@ -942,9 +1123,31 @@ class TradingStore:
         note: str = '',
         ignore_t_plus: bool = False,
         today_local_date: str | None = None,
+        client_request_id: str | None = None,
+        external_trade_id: str | None = None,
     ) -> dict[str, Any]:
+        clean_req = str(client_request_id).strip() if client_request_id else None
+        clean_ext = str(external_trade_id).strip() if external_trade_id else None
         with self._tx() as conn:
             acc = self._fetch_account(conn, account_id)
+            if clean_req:
+                existing = conn.execute(
+                    'SELECT * FROM ledger_events WHERE account_id = ? AND client_request_id = ?',
+                    (account_id, clean_req),
+                ).fetchone()
+                if existing is not None:
+                    d = dict(existing)
+                    d['duplicate'] = True
+                    return d
+            if clean_ext:
+                existing_ext = conn.execute(
+                    'SELECT * FROM ledger_events WHERE account_id = ? AND external_trade_id = ?',
+                    (account_id, clean_ext),
+                ).fetchone()
+                if existing_ext is not None:
+                    d = dict(existing_ext)
+                    d['duplicate'] = True
+                    return d
             eid = self._insert_event_validated(
                 conn,
                 acc,
@@ -962,9 +1165,105 @@ class TradingStore:
                 note=note,
                 ignore_t_plus=ignore_t_plus,
                 today_local_date=today_local_date,
+                client_request_id=clean_req,
+                external_trade_id=clean_ext,
             )
             row = conn.execute('SELECT * FROM ledger_events WHERE event_id = ?', (eid,)).fetchone()
             return dict(row)
+
+    def reverse_event(
+        self,
+        account_id: str,
+        event_id: int,
+        *,
+        reason: str,
+        trade_date: str | None = None,
+        event_time: str | None = None,
+        today_local_date: str | None = None,
+    ) -> dict[str, Any]:
+        clean_reason = str(reason or '').strip()
+        if not clean_reason:
+            raise ValueError('冲正流水必须填写原因')
+        with self._tx() as conn:
+            acc = self._fetch_account(conn, account_id)
+            orig = conn.execute(
+                'SELECT * FROM ledger_events WHERE event_id = ?',
+                (int(event_id),),
+            ).fetchone()
+            if orig is None or orig['account_id'] != account_id:
+                raise KeyError(f'流水记录不存在或不属于 {account_id}: {event_id}')
+            if orig['reverses_event_id'] is not None:
+                raise ValueError('不能对冲正流水再次冲正')
+            already = conn.execute(
+                'SELECT event_id FROM ledger_events WHERE reverses_event_id = ?',
+                (int(event_id),),
+            ).fetchone()
+            if already is not None:
+                raise ValueError(f'流水 #{event_id} 已被冲正 (#{already["event_id"]})')
+
+            market = acc['market']
+            today_str = today_local_date or market_today(market)
+            td = normalize_trade_date(trade_date) if trade_date else today_str
+
+            # Ensure removing this event does not violate non-negative cash or share balances
+            all_events = self._fetch_events(conn, account_id)
+            sim_events = [e for e in all_events if int(e['event_id']) != int(event_id)]
+            sim_pf = project_portfolio(acc, sim_events, None, today_str)
+            if sim_pf['cash'] < -0.01:
+                raise ValueError(
+                    f'冲正该笔流水会导致现金变为负值 ({sim_pf["cash"]:.2f})，请先冲正后续支出流水'
+                )
+            for p in sim_pf['positions']:
+                if p['shares'] < -1e-6:
+                    raise ValueError(
+                        f'冲正该笔流水会导致 {p["symbol"]} 持仓为负 ({p["shares"]:g})，请先冲正后续卖出流水'
+                    )
+
+            rev_id = self._insert_event_validated(
+                conn,
+                acc,
+                event_type='RECONCILE',
+                trade_date=td,
+                event_time=event_time,
+                symbol=orig['symbol'],
+                quantity=-float(orig['quantity'] or 0.0),
+                price=float(orig['price'] or 0.0),
+                fee=0.0,
+                cash_delta=-float(orig['cash_delta'] or 0.0),
+                decision_id=orig['decision_id'],
+                discipline_tag='CORRECTION',
+                note=f'冲正 #{event_id}：{clean_reason}',
+                ignore_t_plus=True,
+                today_local_date=today_str,
+                reverses_event_id=int(event_id),
+            )
+
+            # Recompute ticket progress if linked to a decision ticket
+            if orig['decision_id'] is not None:
+                did = int(orig['decision_id'])
+                t_row = conn.execute(
+                    'SELECT * FROM decision_tickets WHERE decision_id = ?',
+                    (did,),
+                ).fetchone()
+                if t_row is not None and t_row['status'] in ('EXECUTED', 'PARTIAL'):
+                    ticket_obj = self._row_to_ticket(t_row)
+                    linked = [
+                        dict(r)
+                        for r in conn.execute(
+                            'SELECT * FROM ledger_events WHERE decision_id = ? ORDER BY event_id ASC',
+                            (did,),
+                        ).fetchall()
+                    ]
+                    prog = compute_ticket_progress(ticket_obj, linked)
+                    next_st = 'EXECUTED' if prog['all_filled'] else ('PARTIAL' if prog['filled_shares'] > 0 else 'PENDING')
+                    res_at = now_iso() if next_st == 'EXECUTED' else None
+                    conn.execute(
+                        'UPDATE decision_tickets SET status = ?, resolved_at = ? WHERE decision_id = ?',
+                        (next_st, res_at, did),
+                    )
+
+            rev_row = conn.execute('SELECT * FROM ledger_events WHERE event_id = ?', (rev_id,)).fetchone()
+            return dict(rev_row)
 
     def reconcile_account(
         self,
@@ -1068,6 +1367,18 @@ class TradingStore:
             'resolved_at': row['resolved_at'],
         }
 
+    def _enrich_ticket(self, conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any]:
+        ticket = self._row_to_ticket(row)
+        linked = [
+            dict(r)
+            for r in conn.execute(
+                'SELECT * FROM ledger_events WHERE decision_id = ? ORDER BY event_id ASC',
+                (int(row['decision_id']),),
+            ).fetchall()
+        ]
+        ticket['progress'] = compute_ticket_progress(ticket, linked)
+        return ticket
+
     def list_tickets(
         self,
         account_id: str,
@@ -1085,9 +1396,9 @@ class TradingStore:
                 sql += ' AND status = ?'
                 params.append(status)
             sql += ' ORDER BY decision_id DESC LIMIT ?'
-            params.append(max(1, min(500, int(limit))))
+            params.append(max(1, min(1000, int(limit))))
             rows = conn.execute(sql, params).fetchall()
-            return [self._row_to_ticket(r) for r in rows]
+            return [self._enrich_ticket(conn, r) for r in rows]
 
     def get_ticket(self, decision_id: int) -> dict[str, Any]:
         with self._connect() as conn:
@@ -1097,7 +1408,7 @@ class TradingStore:
             ).fetchone()
             if row is None:
                 raise KeyError(f'决策票据不存在: {decision_id}')
-            return self._row_to_ticket(row)
+            return self._enrich_ticket(conn, row)
 
     def create_ticket(
         self,
@@ -1122,7 +1433,7 @@ class TradingStore:
                     (account_id, signal_cutoff),
                 ).fetchone()
                 if existing is not None:
-                    return self._row_to_ticket(existing)
+                    return self._enrich_ticket(conn, existing)
             cur_ts = now_iso()
             cursor = conn.execute(
                 """
@@ -1145,7 +1456,7 @@ class TradingStore:
                 'SELECT * FROM decision_tickets WHERE decision_id = ?',
                 (int(cursor.lastrowid),),
             ).fetchone()
-            return self._row_to_ticket(row)
+            return self._enrich_ticket(conn, row)
 
     def upsert_intraday_ticket(
         self,
@@ -1174,14 +1485,16 @@ class TradingStore:
         fills: list[dict[str, Any]],
         discipline_tag: str = 'FOLLOW',
         review_note: str = '',
-        status: str = 'EXECUTED',
+        status: str | None = None,
         ignore_t_plus: bool = False,
         today_local_date: str | None = None,
+        client_request_id: str | None = None,
     ) -> dict[str, Any]:
-        if status not in ('EXECUTED', 'PARTIAL'):
+        if status is not None and status not in ('EXECUTED', 'PARTIAL'):
             raise ValueError(f'成交状态无效: {status}')
         if not fills:
             raise ValueError('至少需要一条有效成交明细')
+        clean_req = str(client_request_id).strip() if client_request_id else None
         with self._tx() as conn:
             acc = self._fetch_account(conn, account_id)
             row = conn.execute(
@@ -1190,6 +1503,25 @@ class TradingStore:
             ).fetchone()
             if row is None or row['account_id'] != account_id:
                 raise KeyError(f'决策票据不存在或不属于 {account_id}: {decision_id}')
+
+            if clean_req:
+                prefix = clean_req + ':'
+                dup_rows = conn.execute(
+                    """
+                    SELECT event_id FROM ledger_events
+                    WHERE account_id = ?
+                      AND (client_request_id = ? OR substr(client_request_id, 1, ?) = ?)
+                    ORDER BY event_id ASC
+                    """,
+                    (account_id, clean_req, len(prefix), prefix),
+                ).fetchall()
+                if dup_rows:
+                    return {
+                        'ticket': self._enrich_ticket(conn, row),
+                        'created_event_ids': [int(r['event_id']) for r in dup_rows],
+                        'duplicate': True,
+                    }
+
             if row['status'] not in ('PENDING', 'PARTIAL'):
                 raise ValueError(f'票据 #{decision_id} 状态为 {row["status"]}，不能重复确认成交')
 
@@ -1199,7 +1531,7 @@ class TradingStore:
                 key=lambda f: 0 if str(f.get('side', '')).upper() == 'SELL' else 1,
             )
             created_ids: list[int] = []
-            for item in ordered_fills:
+            for idx, item in enumerate(ordered_fills):
                 side = str(item.get('side') or '').upper()
                 if side not in ('BUY', 'SELL'):
                     raise ValueError(f'无效买卖方向: {side}')
@@ -1209,6 +1541,7 @@ class TradingStore:
                 fee_val = clean_float(item.get('fee', 0.0))
                 if qty is None or qty <= 0 or px is None or px <= 0 or fee_val is None or fee_val < 0:
                     raise ValueError(f'成交明细无效: {item}')
+                leg_req = f'{clean_req}:{idx}' if clean_req else None
                 eid = self._insert_event_validated(
                     conn,
                     acc,
@@ -1224,26 +1557,45 @@ class TradingStore:
                     note=str(item.get('note') or review_note or f'执行决策 #{decision_id}'),
                     ignore_t_plus=ignore_t_plus,
                     today_local_date=today_local_date,
+                    client_request_id=leg_req,
                 )
                 created_ids.append(eid)
 
-            resolved_at = now_iso()
+            updated_ticket = self._enrich_ticket(conn, row)
+            all_filled = updated_ticket['progress']['all_filled']
+            next_status = 'EXECUTED' if all_filled else 'PARTIAL'
+            resolved_at = now_iso() if next_status == 'EXECUTED' else None
             conn.execute(
                 """
                 UPDATE decision_tickets
                 SET status = ?, review_note = ?, resolved_at = ?
                 WHERE decision_id = ?
                 """,
-                (status, str(review_note or ''), resolved_at, int(decision_id)),
+                (next_status, str(review_note or ''), resolved_at, int(decision_id)),
             )
             updated = conn.execute(
                 'SELECT * FROM decision_tickets WHERE decision_id = ?',
                 (int(decision_id),),
             ).fetchone()
             return {
-                'ticket': self._row_to_ticket(updated),
+                'ticket': self._enrich_ticket(conn, updated),
                 'created_event_ids': created_ids,
+                'duplicate': False,
             }
+
+    def cancel_ticket_remainder(
+        self,
+        account_id: str,
+        decision_id: int,
+        *,
+        review_note: str = '',
+    ) -> dict[str, Any]:
+        return self.skip_ticket(
+            account_id,
+            decision_id,
+            status='EXPIRED',
+            review_note=str(review_note or '取消剩余未成交余量'),
+        )
 
     def skip_ticket(
         self,
@@ -1291,7 +1643,7 @@ class TradingStore:
                 'SELECT * FROM decision_tickets WHERE decision_id = ?',
                 (int(decision_id),),
             ).fetchone()
-            return self._row_to_ticket(updated)
+            return self._enrich_ticket(conn, updated)
 
     # --- Stop States ---
 
@@ -1505,3 +1857,324 @@ class TradingStore:
                 }
                 for r in rows
             ]
+
+    # --- Full Backup & Restore ---
+
+    @staticmethod
+    def _backup_hash(data: dict[str, Any]) -> str:
+        raw = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
+        return hashlib.sha256(raw).hexdigest()
+
+    def export_full_backup(self) -> dict[str, Any]:
+        with self._connect() as conn:
+            data = {
+                'accounts': [dict(r) for r in conn.execute('SELECT * FROM accounts ORDER BY account_id ASC').fetchall()],
+                'decision_tickets': [
+                    dict(r) for r in conn.execute('SELECT * FROM decision_tickets ORDER BY decision_id ASC').fetchall()
+                ],
+                'ledger_events': [
+                    dict(r) for r in conn.execute('SELECT * FROM ledger_events ORDER BY event_id ASC').fetchall()
+                ],
+                'stop_states': [
+                    dict(r) for r in conn.execute('SELECT * FROM stop_states ORDER BY account_id ASC, symbol ASC').fetchall()
+                ],
+                'review_notes': [
+                    dict(r) for r in conn.execute('SELECT * FROM review_notes ORDER BY review_id ASC').fetchall()
+                ],
+                'notifications': [
+                    dict(r) for r in conn.execute('SELECT * FROM notifications ORDER BY notification_id ASC').fetchall()
+                ],
+            }
+        counts = {k: len(v) for k, v in data.items()}
+        return {
+            'schema_version': 2,
+            'exported_at': now_iso(),
+            'counts': counts,
+            'data': data,
+            'payload_sha256': self._backup_hash(data),
+        }
+
+    def preview_full_backup(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(payload, dict):
+            raise ValueError('备份文件必须为 JSON 对象')
+        if payload.get('schema_version') != 2:
+            raise ValueError('不支持的备份格式版本（需要 schema_version = 2）')
+        data = payload.get('data')
+        if not isinstance(data, dict):
+            raise ValueError('备份缺少 data 数据段')
+        expected_sha = str(payload.get('payload_sha256') or '')
+        if not expected_sha or self._backup_hash(data) != expected_sha:
+            raise ValueError('备份校验和 mismatch：文件可能已被修改或损坏')
+
+        required_tables = ('accounts', 'decision_tickets', 'ledger_events', 'stop_states', 'review_notes', 'notifications')
+        for tbl in required_tables:
+            if not isinstance(data.get(tbl), list):
+                raise ValueError(f'备份数据表 {tbl} 缺失或格式无效')
+
+        account_ids = {str(a.get('account_id') or '') for a in data['accounts']}
+        if not {'CN_MAIN', 'US_MAIN'}.issubset(account_ids):
+            raise ValueError('备份账户表缺少必要的 CN_MAIN / US_MAIN 账户定义')
+        for tbl in ('decision_tickets', 'ledger_events', 'stop_states', 'review_notes'):
+            for item in data[tbl]:
+                if str(item.get('account_id') or '') not in account_ids:
+                    raise ValueError(f'备份表 {tbl} 包含未知账户外键: {item.get("account_id")}')
+
+        return {
+            'valid': True,
+            'schema_version': 2,
+            'exported_at': payload.get('exported_at'),
+            'payload_sha256': expected_sha,
+            'counts': {k: len(data[k]) for k in required_tables},
+            'accounts': [
+                {
+                    'account_id': a['account_id'],
+                    'market': a['market'],
+                    'currency': a['currency'],
+                    'account_mode': a.get('account_mode', 'REAL'),
+                    'strategy_version': a.get('strategy_version', 'baseline'),
+                }
+                for a in data['accounts']
+            ],
+        }
+
+    def restore_full_backup(self, payload: dict[str, Any]) -> dict[str, Any]:
+        preview = self.preview_full_backup(payload)
+        data = payload['data']
+        with self._tx() as conn:
+            for tbl in ('notifications', 'review_notes', 'stop_states', 'ledger_events', 'decision_tickets', 'accounts'):
+                conn.execute(f'DELETE FROM {tbl}')
+
+            for a in data['accounts']:
+                conn.execute(
+                    """
+                    INSERT INTO accounts (
+                        account_id, market, currency, account_mode, strategy_version,
+                        rebalance_deadband, core_floors_json, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        a['account_id'],
+                        a['market'],
+                        a['currency'],
+                        a.get('account_mode', 'REAL'),
+                        a.get('strategy_version', 'baseline'),
+                        float(a['rebalance_deadband']),
+                        a['core_floors_json'],
+                        a['updated_at'],
+                    ),
+                )
+
+            for t in sorted(data['decision_tickets'], key=lambda x: int(x['decision_id'])):
+                conn.execute(
+                    """
+                    INSERT INTO decision_tickets (
+                        decision_id, account_id, source, signal_cutoff, signal_sha256,
+                        status, reason, snapshot_json, review_note, created_at, resolved_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        int(t['decision_id']),
+                        t['account_id'],
+                        t['source'],
+                        t['signal_cutoff'],
+                        t.get('signal_sha256'),
+                        t['status'],
+                        t['reason'],
+                        t['snapshot_json'],
+                        t.get('review_note', ''),
+                        t['created_at'],
+                        t.get('resolved_at'),
+                    ),
+                )
+
+            for e in sorted(data['ledger_events'], key=lambda x: int(x['event_id'])):
+                conn.execute(
+                    """
+                    INSERT INTO ledger_events (
+                        event_id, account_id, event_time, trade_date, event_type, symbol,
+                        quantity, price, fee, cash_delta, decision_id, discipline_tag,
+                        note, client_request_id, external_trade_id, reverses_event_id, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        int(e['event_id']),
+                        e['account_id'],
+                        e['event_time'],
+                        e['trade_date'],
+                        e['event_type'],
+                        e.get('symbol'),
+                        float(e.get('quantity') or 0.0),
+                        float(e.get('price') or 0.0),
+                        float(e.get('fee') or 0.0),
+                        float(e['cash_delta']),
+                        int(e['decision_id']) if e.get('decision_id') is not None else None,
+                        e.get('discipline_tag', 'FOLLOW'),
+                        e.get('note', ''),
+                        e.get('client_request_id'),
+                        e.get('external_trade_id'),
+                        int(e['reverses_event_id']) if e.get('reverses_event_id') is not None else None,
+                        e['created_at'],
+                    ),
+                )
+
+            for s in data['stop_states']:
+                conn.execute(
+                    """
+                    INSERT INTO stop_states (
+                        account_id, symbol, session_date, active_line, below_count,
+                        stage, pending_stage, pending_issued_at, pending_line,
+                        pending_reason, cooldown_until_date, last_bar_start, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        s['account_id'],
+                        s['symbol'],
+                        s.get('session_date'),
+                        clean_float(s.get('active_line')),
+                        int(s.get('below_count') or 0),
+                        int(s.get('stage') or 0),
+                        int(s.get('pending_stage') or 0),
+                        s.get('pending_issued_at'),
+                        clean_float(s.get('pending_line')),
+                        s.get('pending_reason', ''),
+                        s.get('cooldown_until_date'),
+                        s.get('last_bar_start'),
+                        s['updated_at'],
+                    ),
+                )
+
+            for n in sorted(data['review_notes'], key=lambda x: int(x['review_id'])):
+                conn.execute(
+                    """
+                    INSERT INTO review_notes (
+                        review_id, account_id, period_type, period_key,
+                        summary_json, reflection, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        int(n['review_id']),
+                        n['account_id'],
+                        n['period_type'],
+                        n['period_key'],
+                        n['summary_json'],
+                        n.get('reflection', ''),
+                        n['created_at'],
+                    ),
+                )
+
+            for nt in sorted(data['notifications'], key=lambda x: int(x['notification_id'])):
+                conn.execute(
+                    """
+                    INSERT INTO notifications (
+                        notification_id, account_id, event_key, category, severity,
+                        title, message, payload_json, read_at, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        int(nt['notification_id']),
+                        nt.get('account_id'),
+                        nt['event_key'],
+                        nt['category'],
+                        nt['severity'],
+                        nt['title'],
+                        nt['message'],
+                        nt.get('payload_json', '{}'),
+                        nt.get('read_at'),
+                        nt['created_at'],
+                    ),
+                )
+
+            seq_exists = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='sqlite_sequence'"
+            ).fetchone()
+            if seq_exists is not None:
+                for tbl, pk in (
+                    ('decision_tickets', 'decision_id'),
+                    ('ledger_events', 'event_id'),
+                    ('review_notes', 'review_id'),
+                    ('notifications', 'notification_id'),
+                ):
+                    max_id = conn.execute(f'SELECT COALESCE(MAX({pk}), 0) AS m FROM {tbl}').fetchone()['m']
+                    conn.execute('DELETE FROM sqlite_sequence WHERE name = ?', (tbl,))
+                    if max_id > 0:
+                        conn.execute('INSERT INTO sqlite_sequence (name, seq) VALUES (?, ?)', (tbl, int(max_id)))
+        return preview
+
+    # --- Notifications ---
+
+    def notify_once(
+        self,
+        event_key: str,
+        *,
+        account_id: str | None = None,
+        category: str,
+        severity: str,
+        title: str,
+        message: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        key = str(event_key or '').strip()
+        if not key:
+            raise ValueError('event_key 不能为空')
+        with self._tx() as conn:
+            existing = conn.execute(
+                'SELECT notification_id FROM notifications WHERE event_key = ?',
+                (key,),
+            ).fetchone()
+            if existing is not None:
+                return None
+            stamp = now_iso()
+            cursor = conn.execute(
+                """
+                INSERT INTO notifications (
+                    account_id, event_key, category, severity, title, message, payload_json, read_at, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)
+                """,
+                (
+                    account_id,
+                    key,
+                    str(category),
+                    str(severity),
+                    str(title),
+                    str(message),
+                    json.dumps(payload or {}, ensure_ascii=False),
+                    stamp,
+                ),
+            )
+            row = conn.execute(
+                'SELECT * FROM notifications WHERE notification_id = ?',
+                (int(cursor.lastrowid),),
+            ).fetchone()
+            out = dict(row)
+            out['payload'] = json.loads(out.pop('payload_json'))
+            return out
+
+    def list_notifications(self, *, limit: int = 50, unread_only: bool = False) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            sql = 'SELECT * FROM notifications'
+            if unread_only:
+                sql += ' WHERE read_at IS NULL'
+            sql += ' ORDER BY notification_id DESC LIMIT ?'
+            rows = conn.execute(sql, (max(1, min(500, int(limit))),)).fetchall()
+            out = []
+            for r in rows:
+                d = dict(r)
+                d['payload'] = json.loads(d.pop('payload_json') or '{}')
+                out.append(d)
+            return out
+
+    def mark_notifications_read(self, notification_ids: list[int] | None = None) -> int:
+        stamp = now_iso()
+        with self._tx() as conn:
+            if notification_ids is None:
+                cur = conn.execute('UPDATE notifications SET read_at = ? WHERE read_at IS NULL', (stamp,))
+                return int(cur.rowcount)
+            ids = [int(x) for x in notification_ids]
+            if not ids:
+                return 0
+            placeholders = ','.join('?' for _ in ids)
+            cur = conn.execute(
+                f'UPDATE notifications SET read_at = ? WHERE read_at IS NULL AND notification_id IN ({placeholders})',
+                [stamp, *ids],
+            )
+            return int(cur.rowcount)

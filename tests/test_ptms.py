@@ -15,11 +15,15 @@ sys.path.insert(0, str(ROOT))
 from live.decisions import (
     add_trading_sessions,
     build_rebalance_plan,
+    compute_execution_window,
     create_weekly_decision_ticket,
+    evaluate_account_data_gate,
     execute_decision_ticket,
     sync_account_intraday_stops,
 )
-from live.market import MarketClock
+from live.importer import commit_broker_csv, preview_broker_csv
+from live.market import MarketClock, SYMBOLS, quote_record
+from live.notifications import evaluate_and_emit_notifications
 from live.review import build_review_report, compute_twr_series, render_review_markdown
 from live.service import LiveService, make_server
 from live.store import TradingStore
@@ -365,7 +369,10 @@ def test_review_twr_immune_to_large_cash_inflows_and_slippage(store):
     assert '2026-W47' in md
 
 
-def test_ptms_http_endpoints_and_security(ptms_service):
+def test_ptms_http_endpoints_and_security(ptms_service, monkeypatch):
+    import numpy as np
+    from v15.us_snapshot import load_us_open, load_us_prices
+
     server = make_server(ptms_service, port=0)
 
     class Connection:
@@ -381,18 +388,21 @@ def test_ptms_http_endpoints_and_security(ptms_service):
         def settimeout(self, value):
             pass
 
-    def call(method, path, body=None, extra_headers=''):
-        payload = json.dumps(body).encode('utf-8') if body is not None else b''
-        hdr = f'Host: 127.0.0.1:{server.server_port}\r\n'
-        if body is not None:
-            hdr += f'Content-Type: application/json\r\nContent-Length: {len(payload)}\r\n'
-        hdr += extra_headers
-        raw = f'{method} {path} HTTP/1.0\r\n{hdr}\r\n'.encode('utf-8') + payload
-        conn = Connection(raw)
-        server.RequestHandlerClass(conn, ('127.0.0.1', 0), server)
-        head, resp_body = conn.output.getvalue().split(b'\r\n\r\n', 1)
-        return int(head.split()[1]), head, resp_body
+    def make_caller(srv):
+        def call(method, path, body=None, extra_headers=''):
+            payload = json.dumps(body).encode('utf-8') if body is not None else b''
+            hdr = f'Host: 127.0.0.1:{srv.server_port}\r\n'
+            if body is not None:
+                hdr += f'Content-Type: application/json\r\nContent-Length: {len(payload)}\r\n'
+            hdr += extra_headers
+            raw = f'{method} {path} HTTP/1.0\r\n{hdr}\r\n'.encode('utf-8') + payload
+            conn = Connection(raw)
+            srv.RequestHandlerClass(conn, ('127.0.0.1', 0), srv)
+            head, resp_body = conn.output.getvalue().split(b'\r\n\r\n', 1)
+            return int(head.split()[1]), head, resp_body
+        return call
 
+    call = make_caller(server)
     try:
         # Static PTMS assets work; traversal blocked
         st, _, css = call('GET', '/assets/ptms.css')
@@ -406,15 +416,20 @@ def test_ptms_http_endpoints_and_security(ptms_service):
         # /api/refresh remains strict about rejecting body
         assert call('POST', '/api/refresh', {'x': 1})[0] == 400
 
-        # Init -> Config -> Reconcile -> Create Ticket -> Execute -> Review Note -> Export
+        # Offline StubProvider -> BLOCKED gate, notifications emitted, plan create blocked, manual ledger still allowed
         st, _, data = call('GET', '/api/ptms/state')
-        assert st == 200 and 'CN_MAIN' in json.loads(data)['accounts']
+        state_obj = json.loads(data)
+        assert st == 200 and 'CN_MAIN' in state_obj['accounts']
+        assert state_obj['accounts']['CN_MAIN']['plan']['data_gate']['status'] == 'BLOCKED'
+        assert state_obj['accounts']['CN_MAIN']['plan']['can_execute_plan'] is False
+        assert state_obj['unread_notifications'] >= 2
 
         st, _, res_init = call(
             'POST',
             '/api/ptms/ledger/init',
             {
                 'account_id': 'CN_MAIN',
+                'account_mode': 'REAL',
                 'trade_date': '2026-11-20',
                 'cash': 100000.0,
                 'positions': [],
@@ -422,41 +437,370 @@ def test_ptms_http_endpoints_and_security(ptms_service):
         )
         assert st == 200 and json.loads(res_init)['state']['accounts']['CN_MAIN']['portfolio']['cash'] == 100000.0
 
-        st, _, _ = call(
+        # Plan creation is blocked when data_gate is BLOCKED
+        assert call('POST', '/api/ptms/decisions/create', {'account_id': 'CN_MAIN'})[0] == 400
+        # Manual event entry of already-occurred trade remains unblocked
+        st, _, ev_res = call(
             'POST',
-            '/api/ptms/account/config',
-            {'account_id': 'CN_MAIN', 'strategy_version': 'baseline', 'rebalance_deadband': 0.10},
+            '/api/ptms/ledger/event',
+            {
+                'account_id': 'CN_MAIN',
+                'event_type': 'CASH_IN',
+                'trade_date': '2026-11-20',
+                'amount': 5000.0,
+                'note': '补录银证转入',
+                'client_request_id': 'manual-cash-1',
+            },
         )
-        assert st == 200
+        assert st == 200 and json.loads(ev_res)['state']['accounts']['CN_MAIN']['portfolio']['cash'] == 105000.0
+    finally:
+        server.server_close()
 
-        st, _, ticket_res = call('POST', '/api/ptms/decisions/create', {'account_id': 'CN_MAIN'})
+    # Phase 2: Ready US provider while CN fails -> US READY, CN BLOCKED, full HTTP ticket/partial/reverse/backup/import lifecycle
+    fixed_now = pd.Timestamp('2026-11-23T15:00:00Z')  # Monday 10:00 ET / 23:00 CST
+
+    class VerifiedSessions:
+        def __init__(self, tz_name):
+            self.tz_name = tz_name
+
+        def is_session(self, d):
+            return pd.Timestamp(d).dayofweek < 5
+
+        def is_open_on_minute(self, ts):
+            local = pd.Timestamp(ts).tz_convert(self.tz_name)
+            return local.dayofweek < 5 and (9, 30) <= (local.hour, local.minute) <= (15, 0)
+
+        def sessions_in_range(self, start, end):
+            return pd.bdate_range(pd.Timestamp(start), pd.Timestamp(end))
+
+        def session_open(self, d):
+            return pd.Timestamp(f'{pd.Timestamp(d).date()} 09:30:00', tz=self.tz_name).tz_convert('UTC')
+
+        def session_close(self, d):
+            return pd.Timestamp(f'{pd.Timestamp(d).date()} 15:00:00', tz=self.tz_name).tz_convert('UTC')
+
+    class UsOnlyProvider:
+        name = 'us_only_live'
+
+        def quotes(self, now):
+            return {
+                'QQQ.US': quote_record('QQQ.US', 500.0, 498.0, now - pd.Timedelta(seconds=15), 'quote', now),
+                'BIL.US': quote_record('BIL.US', 91.5, 91.5, now - pd.Timedelta(seconds=15), 'quote', now),
+            }, {'515180.SH': 'cn offline'}
+
+        def daily(self):
+            us, op = load_us_prices(), load_us_open()
+            out = {}
+            for s, (_, market, key, _) in SYMBOLS.items():
+                if market == 'US':
+                    f = pd.DataFrame({'close': us[key].to_numpy(), 'open': (op[key] if key in op else us[key]).to_numpy()}, index=us.index + pd.Timedelta(days=4))
+                    out[s] = {'raw': f.copy(), 'adjusted': f.copy()}
+            return out, {'515180.SH': 'cn offline'}
+
+        def tape(self):
+            return {}
+
+        def bars(self):
+            return {}, {}
+
+    monkeypatch.setattr('live.service.utc_now', lambda: fixed_now)
+    clk = MarketClock()
+    clk.calendars = {'US': VerifiedSessions('America/New_York'), 'CN': VerifiedSessions('Asia/Shanghai')}
+    srv2_root = ptms_service.root / 'srv2'
+    (srv2_root / 'research_outputs').mkdir(parents=True)
+    (srv2_root / 'research_outputs' / 'V22_dashboard_snapshot.json').write_bytes(
+        (ROOT / 'research_outputs' / 'V22_dashboard_snapshot.json').read_bytes()
+    )
+    svc2 = LiveService(UsOnlyProvider(), root=srv2_root, clock=clk)
+    assert svc2.refresh_once(history=True)
+    srv2 = make_server(svc2, port=0)
+    call2 = make_caller(srv2)
+    try:
+        st, _, st_bytes = call2('GET', '/api/ptms/state')
+        st2 = json.loads(st_bytes)
+        assert st == 200
+        assert st2['accounts']['CN_MAIN']['plan']['data_gate']['status'] == 'BLOCKED'
+        assert st2['accounts']['US_MAIN']['plan']['data_gate']['status'] == 'READY'
+
+        assert call2('POST', '/api/ptms/ledger/init', {
+            'account_id': 'US_MAIN', 'account_mode': 'REAL', 'trade_date': '2026-11-23', 'cash': 100000.0, 'positions': [],
+        })[0] == 200
+        assert call2('POST', '/api/ptms/account/config', {
+            'account_id': 'US_MAIN', 'strategy_version': 'baseline', 'rebalance_deadband': 0.05,
+        })[0] == 200
+
+        st, _, ticket_res = call2('POST', '/api/ptms/decisions/create', {'account_id': 'US_MAIN'})
         assert st == 200
         ticket = json.loads(ticket_res)['ticket']
         orders = ticket['snapshot']['orders']
         assert len(orders) > 0
 
-        fills = [
-            {'symbol': o['symbol'], 'side': o['side'], 'quantity': o['quantity'], 'price': o['ref_price'], 'fee': o['est_fee']}
-            for o in orders
-        ]
-        st, _, exec_res = call(
-            'POST',
-            '/api/ptms/decisions/execute',
-            {'account_id': 'CN_MAIN', 'decision_id': ticket['decision_id'], 'trade_date': '2026-11-20', 'fills': fills},
-        )
-        assert st == 200 and json.loads(exec_res)['result']['ticket']['status'] == 'EXECUTED'
-
-        st, _, _ = call(
-            'POST',
-            '/api/ptms/review/note',
-            {'account_id': 'CN_MAIN', 'period_type': 'WEEKLY', 'period_key': '2026-W47', 'reflection': 'HTTP测试复盘'},
-        )
+        # Partial fill first leg (half qty), verify PARTIAL & idempotency
+        o0 = orders[0]
+        half_qty = round(o0['quantity'] / 2, 2)
+        st, _, exec_res = call2('POST', '/api/ptms/decisions/execute', {
+            'account_id': 'US_MAIN',
+            'decision_id': ticket['decision_id'],
+            'trade_date': '2026-11-23',
+            'fills': [{'symbol': o0['symbol'], 'side': o0['side'], 'quantity': half_qty, 'price': o0['ref_price'], 'fee': 1.0}],
+            'client_request_id': 'http-fill-1',
+        })
         assert st == 200
+        exec_obj = json.loads(exec_res)['result']
+        assert exec_obj['ticket']['status'] == 'PARTIAL'
+        assert exec_obj['ticket']['progress']['remaining_shares'] > 0
 
-        st, _, rev_body = call('GET', '/api/ptms/review?account_id=CN_MAIN')
-        assert st == 200 and json.loads(rev_body)['notes'][0]['reflection'] == 'HTTP测试复盘'
+        # Idempotent retry
+        st, _, dup_res = call2('POST', '/api/ptms/decisions/execute', {
+            'account_id': 'US_MAIN',
+            'decision_id': ticket['decision_id'],
+            'trade_date': '2026-11-23',
+            'fills': [{'symbol': o0['symbol'], 'side': o0['side'], 'quantity': half_qty, 'price': o0['ref_price'], 'fee': 1.0}],
+            'client_request_id': 'http-fill-1',
+        })
+        assert st == 200 and json.loads(dup_res)['result']['duplicate'] is True
 
-        st, _, md_body = call('GET', '/api/ptms/export?account_id=CN_MAIN&format=markdown')
+        # Cancel remainder
+        st, _, cancel_res = call2('POST', '/api/ptms/decisions/cancel-remainder', {
+            'account_id': 'US_MAIN',
+            'decision_id': ticket['decision_id'],
+            'review_note': '余量不再追价',
+        })
+        assert st == 200 and json.loads(cancel_res)['ticket']['status'] == 'EXPIRED'
+
+        # CSV import preview & commit
+        csv_text = 'date,symbol,side,quantity,price,fee,trade_id\n2026-11-23,BIL,BUY,10,91.50,0.5,US-CSV-1\n'
+        st, _, pv_res = call2('POST', '/api/ptms/import/preview', {'account_id': 'US_MAIN', 'csv_text': csv_text})
+        assert st == 200 and json.loads(pv_res)['preview']['counts']['new'] == 1
+        st, _, cm_res = call2('POST', '/api/ptms/import/commit', {'account_id': 'US_MAIN', 'csv_text': csv_text})
+        assert st == 200 and json.loads(cm_res)['result']['imported_count'] == 1
+
+        # Reverse last event & note review & backup/restore & read notifications
+        ev_id = json.loads(cm_res)['result']['created_event_ids'][0]
+        assert call2('POST', '/api/ptms/ledger/reverse', {'account_id': 'US_MAIN', 'event_id': ev_id, 'reason': '测试冲正'})[0] == 200
+        assert call2('POST', '/api/ptms/review/note', {
+            'account_id': 'US_MAIN', 'period_type': 'WEEKLY', 'period_key': '2026-W47', 'reflection': 'HTTP测试复盘',
+        })[0] == 200
+        st, _, rev_body = call2('GET', '/api/ptms/review?account_id=US_MAIN')
+        rev_obj = json.loads(rev_body)
+        assert st == 200 and rev_obj['notes'][0]['reflection'] == 'HTTP测试复盘'
+        assert 'plan_completion_rate_pct' in rev_obj['discipline']
+
+        st, _, backup_body = call2('GET', '/api/ptms/backup')
+        backup_obj = json.loads(backup_body)
+        assert st == 200 and backup_obj['schema_version'] == 2
+        assert call2('POST', '/api/ptms/restore/preview', {'backup': backup_obj})[0] == 200
+        assert call2('POST', '/api/ptms/restore', {'backup': backup_obj})[0] == 200
+
+        st, _, md_body = call2('GET', '/api/ptms/export?account_id=US_MAIN&format=markdown')
         assert st == 200 and 'HTTP测试复盘' in md_body.decode('utf-8')
+        st, _, notifs_body = call2('GET', '/api/ptms/notifications')
+        assert st == 200 and len(json.loads(notifs_body)['notifications']) >= 1
+        assert call2('POST', '/api/ptms/notifications/read', {})[0] == 200
     finally:
-        server.server_close()
+        srv2.server_close()
+
+
+def test_partial_fill_idempotency_reversal_and_separated_review_metrics(store):
+    store.init_account('CN_MAIN', trade_date='2026-11-20', cash=100000.0, positions=[])
+    acc = store.get_account('CN_MAIN')
+    quotes = {
+        '159915.SZ': {'price': 2.23, 'source': 'quote'},
+        '515180.SH': {'price': 1.35, 'source': 'quote'},
+        '511260.SH': {'price': 137.0, 'source': 'quote'},
+        '518880.SH': {'price': 7.28, 'source': 'quote'},
+        '511880.SH': {'price': 100.9, 'source': 'quote'},
+    }
+    pf = store.get_portfolio('CN_MAIN', quotes, today_local_date='2026-11-23')
+    plan = build_rebalance_plan(
+        acc, pf,
+        {'label': 'V18', 'cutoff': '2026-11-20', 'signalWeek': '2026-11-16', 'target': {'tech': 0.0, 'red': 0.44, 'bond': 0.0, 'gold': 0.0, 'money': 0.56}},
+        {}, '2026-11-23', [],
+    )
+    # Build explicit 32,100-share single-leg snapshot reproducing the audit scenario
+    plan['orders'] = [{
+        'symbol': '515180.SH', 'name': '红利ETF', 'bucket': 'red', 'side': 'BUY',
+        'quantity': 32100.0, 'lot_size': 100, 'sellable_shares': 0.0, 'ref_price': 1.35,
+        'est_amount': 43335.0, 'est_fee': 4.33, 't_plus': 1, 'warning': '', 'reason': '建仓红利',
+    }]
+    ticket = create_weekly_decision_ticket(store, plan)
+    did = ticket['decision_id']
+
+    # Fill 100 / 32,100 shares
+    res1 = execute_decision_ticket(
+        store, 'CN_MAIN', did, trade_date='2026-11-23',
+        fills=[{'symbol': '515180.SH', 'side': 'BUY', 'quantity': 100.0, 'price': 1.35, 'fee': 1.0}],
+        discipline_tag='FOLLOW', client_request_id='req-100',
+    )
+    assert res1['duplicate'] is False
+    assert res1['ticket']['status'] == 'PARTIAL'
+    assert res1['ticket']['progress']['filled_shares'] == pytest.approx(100.0)
+    assert res1['ticket']['progress']['remaining_shares'] == pytest.approx(32000.0)
+    assert res1['ticket']['progress']['completion_pct'] == pytest.approx(100 / 32100 * 100, abs=0.05)
+
+    # Duplicate client_request_id must not double-book
+    res_dup = execute_decision_ticket(
+        store, 'CN_MAIN', did, trade_date='2026-11-23',
+        fills=[{'symbol': '515180.SH', 'side': 'BUY', 'quantity': 100.0, 'price': 1.35, 'fee': 1.0}],
+        discipline_tag='FOLLOW', client_request_id='req-100',
+    )
+    assert res_dup['duplicate'] is True
+    assert store.get_portfolio('CN_MAIN', quotes)['positions'][1]['shares'] == pytest.approx(100.0)
+
+    # Review separates plan completion rate (~0.3%) from trade discipline rate (100%)
+    rep = build_review_report(store, acc, store.get_portfolio('CN_MAIN', quotes), [], {}, quotes, '2026-11-23')
+    assert rep['discipline']['plan_completion_rate_pct'] == pytest.approx(0.3, abs=0.1)
+    assert rep['discipline']['trade_discipline_rate_pct'] == pytest.approx(100.0)
+    assert rep['discipline']['partial_tickets'] == 1
+
+    # Reverse the 100-share buy -> ticket returns to PENDING with 32,100 remaining & portfolio cash restored
+    buy_ev_id = res1['created_event_ids'][0]
+    store.reverse_event('CN_MAIN', buy_ev_id, reason='填错委托', trade_date='2026-11-23')
+    assert store.get_portfolio('CN_MAIN', quotes)['cash'] == pytest.approx(100000.0)
+    t_after_rev = store.get_ticket(did)
+    assert t_after_rev['status'] == 'PENDING'
+    assert t_after_rev['progress']['remaining_shares'] == pytest.approx(32100.0)
+
+    # Re-fill 100 shares then cancel remainder -> EXPIRED
+    execute_decision_ticket(
+        store, 'CN_MAIN', did, trade_date='2026-11-23',
+        fills=[{'symbol': '515180.SH', 'side': 'BUY', 'quantity': 100.0, 'price': 1.35, 'fee': 1.0}],
+        discipline_tag='FOLLOW', client_request_id='req-100-v2',
+    )
+    cancelled = store.cancel_ticket_remainder('CN_MAIN', did, review_note='放弃余量')
+    assert cancelled['status'] == 'EXPIRED'
+
+
+def test_per_account_data_gate_and_execution_window(store):
+    class FakeCal:
+        def sessions_in_range(self, start, end):
+            return pd.bdate_range(pd.Timestamp(start), pd.Timestamp(end))
+
+    clk = MarketClock()
+    clk.calendars = {'CN': FakeCal(), 'US': FakeCal()}
+    acc_cn = store.get_account('CN_MAIN')
+    cn_quotes = {s: {'price': 1.0, 'source': 'quote', 'stale': False, 'refresh_failed': False} for s in SYMBOLS if SYMBOLS[s][1] == 'CN'}
+    model = {'origin': 'online_recomputed_simulation', 'cutoff': '2026-11-20', 'target': {'tech': 0.2, 'red': 0.8}}
+    st_ok = {'state': 'current', 'cutoff': '2026-11-20'}
+
+    # Pre-market Monday 2026-11-23 09:00 CST (01:00 UTC) -> WAIT_WINDOW
+    gate_pre = evaluate_account_data_gate(
+        acc_cn, model, st_ok, cn_quotes, clk, pd.Timestamp('2026-11-23T01:00:00Z'),
+        market_status_entry={'state': 'pre_market', 'label': '盘前'},
+    )
+    assert gate_pre['status'] == 'WAIT_WINDOW' and gate_pre['can_execute_plan'] is False
+    assert gate_pre['earliest_execution_date'] == '2026-11-23'
+
+    # Open Monday 2026-11-23 09:35 CST (01:35 UTC) -> READY
+    gate_open = evaluate_account_data_gate(
+        acc_cn, model, st_ok, cn_quotes, clk, pd.Timestamp('2026-11-23T01:35:00Z'),
+        market_status_entry={'state': 'open', 'label': '交易中'},
+    )
+    assert gate_open['status'] == 'READY' and gate_open['can_execute_plan'] is True
+
+    # Stale quote while open -> BLOCKED
+    stale_q = dict(cn_quotes)
+    stale_q['159915.SZ'] = {'price': 2.2, 'source': 'quote', 'stale': True, 'refresh_failed': False}
+    gate_stale = evaluate_account_data_gate(
+        acc_cn, model, st_ok, stale_q, clk, pd.Timestamp('2026-11-23T02:00:00Z'),
+        market_status_entry={'state': 'open', 'label': '交易中'},
+    )
+    assert gate_stale['status'] == 'BLOCKED' and gate_stale['can_execute_plan'] is False
+
+    # Research fallback origin or unverified calendar -> BLOCKED
+    gate_res = evaluate_account_data_gate(
+        acc_cn, {'origin': 'frozen_research_snapshot', 'cutoff': '2026-11-20'}, st_ok, cn_quotes, clk,
+        pd.Timestamp('2026-11-23T02:00:00Z'), market_status_entry={'state': 'open', 'label': '交易中'},
+    )
+    assert gate_res['status'] == 'BLOCKED'
+
+    win = compute_execution_window('US', '2026-11-20', clk, pd.Timestamp('2026-11-23T14:00:00Z'))  # 09:00 ET
+    assert win['window_open'] is False and win['earliest_execution_date'] == '2026-11-23'
+
+
+def test_full_backup_restore_roundtrip_and_tamper_rejection(store, tmp_path):
+    store.init_account('CN_MAIN', trade_date='2026-11-18', cash=200000.0, positions=[], account_mode='DEMO')
+    for i in range(1005):
+        store.record_event(
+            'CN_MAIN', event_type='DIVIDEND', trade_date='2026-11-19', amount=1.0,
+            note=f'bulk-{i}', client_request_id=f'bulk-{i}',
+        )
+    assert len(store.list_events('CN_MAIN', limit=None)) == 1006
+    store.save_stop_state('CN_MAIN', '515180.SH', {'active_line': 1.33, 'stage': 1})
+    store.upsert_review_note('CN_MAIN', period_type='WEEKLY', period_key='2026-W47', summary={'x': 1}, reflection='完整备份检查')
+    store.notify_once('k1', account_id='CN_MAIN', category='WEEKLY_SIGNAL', severity='action', title='t', message='m')
+
+    backup = store.export_full_backup()
+    assert backup['counts']['ledger_events'] == 1006
+
+    # Reject tampered checksum
+    bad = json.loads(json.dumps(backup))
+    bad['data']['accounts'][0]['strategy_version'] = 'advisory'
+    with pytest.raises(ValueError, match='校验和'):
+        store.preview_full_backup(bad)
+
+    # Restore into fresh empty DB
+    fresh = TradingStore(tmp_path / 'restored.db')
+    fresh.restore_full_backup(backup)
+    assert fresh.get_account('CN_MAIN')['account_mode'] == 'DEMO'
+    assert fresh.get_portfolio('CN_MAIN')['cash'] == pytest.approx(201005.0)
+    assert len(fresh.list_events('CN_MAIN', limit=None)) == 1006
+    assert fresh.get_stop_states('CN_MAIN')['515180.SH']['stage'] == 1
+    assert fresh.list_review_notes('CN_MAIN')[0]['reflection'] == '完整备份检查'
+    assert len(fresh.list_notifications()) == 1
+
+
+def test_broker_csv_import_gb18030_dedup_and_out_of_pool(store):
+    store.init_account('CN_MAIN', trade_date='2026-11-20', cash=50000.0, positions=[])
+    csv_raw = (
+        '成交日期,证券代码,买卖标志,成交数量,成交均价,手续费,成交编号\n'
+        '2026-11-21,515180,证券买入,2000,1.35,2.7,CN-1001\n'
+        '2026-11-21,600519,证券买入,100,1500,5.0,CN-OUT-1\n'
+    ).encode('gb18030')
+
+    pv = preview_broker_csv(store, 'CN_MAIN', csv_raw)
+    assert pv['counts'] == {'new': 1, 'duplicate': 0, 'ignored': 1, 'error': 0}
+    assert pv['cash_delta'] == pytest.approx(-(2000 * 1.35 + 2.7))
+
+    res = commit_broker_csv(store, 'CN_MAIN', csv_raw)
+    assert res['imported_count'] == 1 and res['ignored_count'] == 1
+
+    pv2 = preview_broker_csv(store, 'CN_MAIN', csv_raw)
+    assert pv2['counts']['new'] == 0 and pv2['counts']['duplicate'] == 1
+    res2 = commit_broker_csv(store, 'CN_MAIN', csv_raw)
+    assert res2['imported_count'] == 0 and res2['skipped_duplicates'] == 1
+
+
+def test_notifications_dedup_once(store):
+    state = {
+        'accounts': {
+            'US_MAIN': {
+                'account': {'account_id': 'US_MAIN', 'market': 'US'},
+                'plan': {
+                    'data_gate': {'status': 'BLOCKED', 'reasons': ['缺少实时报价']},
+                    'verdict': 'DATA_BLOCKED',
+                    'verdict_label': '拦截',
+                    'verdict_reason': '缺少报价',
+                    'signal_cutoff': '2026-11-20',
+                    'signal_sha256': 'abc123',
+                    'orders': [],
+                },
+                'tickets': [],
+            }
+        }
+    }
+    first = evaluate_and_emit_notifications(store, state)
+    second = evaluate_and_emit_notifications(store, state)
+    assert len(first) == 1 and len(second) == 0
+
+    state['accounts']['US_MAIN']['plan'].update({
+        'data_gate': {'status': 'READY', 'can_execute_plan': True, 'reasons': []},
+        'verdict': 'ACTION_REBALANCE',
+        'verdict_label': '建议按周频调仓',
+        'orders': [{'symbol': 'QQQ.US'}],
+    })
+    third = evaluate_and_emit_notifications(store, state)
+    assert {n['category'] for n in third} == {'FEED_STATUS', 'WEEKLY_SIGNAL'}
+    assert len(store.list_notifications(unread_only=True)) == 3
+    store.mark_notifications_read()
+    assert len(store.list_notifications(unread_only=True)) == 0
