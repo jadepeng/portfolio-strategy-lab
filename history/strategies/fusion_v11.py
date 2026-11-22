@@ -4,7 +4,7 @@ Uses V10 signals and execution, no look-ahead. All risk targets are forecasts.
 from dataclasses import dataclass, replace
 import numpy as np
 import pandas as pd
-from fusion_v10 import V10Config, signals_v10, simulate_v10, TARGETS, PRICES
+from history.strategies.fusion_v10 import V10Config, signals_v10, simulate_v10, TARGETS, PRICES
 
 @dataclass(frozen=True)
 class V11Config:

@@ -4,7 +4,7 @@ import sys,json
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
 import pandas as pd
 import numpy as np
-from fusion_v10 import PRICES
+from history.strategies.fusion_v10 import PRICES
 from v14.market_snapshot import load_weekly
 from v15.us_snapshot import load_us_prices,load_us_open
 from v15.cross_market import observed_us_by_cn_week

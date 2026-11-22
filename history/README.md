@@ -1,17 +1,27 @@
-# 旧版策略与研究资料归档
+# 历史策略与研究资料归档
 
-这里存放不再作为当前 V18—V22 默认交易策略入口的早期策略与研究成果：
+此目录统一保存**非当前默认交易入口的历史策略实现**；移动文件不改变交易参数、历史结果或实时决策规则。
 
-- `strategies/`：V3 回测、V4 趋势动物、红利科技轮动、V8/V9 策略、V9 执行实验。
-- `reports/`：V4/V5 交易纪律与 V5—V11 历史研究报告。
+- `strategies/`：原始双资产 `strategy_engine.py`、V3、V4 趋势动物与轮动引擎，以及 V5/V6/V7/V8/V9/V10/V11 融合策略和 V9 执行实验。
+- `reports/`：V4/V5 交易纪律、V5—V11 和 V13—V21 研究报告。
 
-历史策略仍可以从仓库根目录复现：
+所有旧版实现从根目录移走（不保留根目录影子副本）；复现与当前模块的导入统一改为 `history.strategies.<module>`。例：
 
-```bash
-python -m pytest tests/test_history_layout.py tests/test_trend_animal_v4.py tests/test_rotation.py tests/test_fusion_v8.py tests/test_fusion_v9.py tests/test_fusion_v9_execution.py -q
-python scripts/reproduce_v9.py
+```python
+from history.strategies.fusion_v10 import V10Config
+from history.strategies.fusion_v11 import V11Config
 ```
 
-旧代码的导入方式改为 `from history.strategies.fusion_v9 import V9Config` 等。
+## 验证及历史复现
 
-**仍留在根目录的共享依赖**：`strategy_engine.py`、`fusion_v5.py`、`fusion_v6.py`、`fusion_v7.py`、`fusion_v10.py`、`fusion_v11.py`，因为现行 V18—V22 回测、策略页或模型集成仍引用它们。现行 `v13/`—`v22/` 和 `live/` 保留原位。本次也不移动 `verified_*.json`，以保持现有历史数据读取路径。
+在仓库根目录运行：
+
+```bash
+python -m pytest tests -q
+python scripts/reproduce_v9.py
+python scripts/reproduce_v11.py
+```
+
+**运行中依赖的边界**：现行 V18/V20 在线重算仍经 V13—V17 使用历史基类，因此 `v13/`—`v22/` 与 `live/` 保留原位（它们不是可直接卸载的死代码）；旧版 `pages/` 和 `scripts/` 保留入口以避免破坏已有使用方式。
+
+**数据边界**：`verified_*.json`、`market_data/`、`research_outputs/` 的路径均不更改，以保证历史复现文件检索和当前网页快照读取。归档不构成新的收益验证或盲测。

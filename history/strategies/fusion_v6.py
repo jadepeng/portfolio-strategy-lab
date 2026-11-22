@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 import numpy as np
 import pandas as pd
-from fusion_v5 import FusionConfig, create_signals, simulate, validate_input, metrics
+from history.strategies.fusion_v5 import FusionConfig, create_signals, simulate, validate_input, metrics
 
 @dataclass(frozen=True)
 class V6Config:
@@ -120,7 +120,7 @@ def signal_v6(prices: pd.DataFrame, base: FusionConfig, config: V6Config) -> pd.
 
 def v6_base(frequency:str='week'):
     """Smaller pilot and turnover deadband; no changes to V5 hard exits."""
-    from fusion_v5 import weekly_config
+    from history.strategies.fusion_v5 import weekly_config
     return replace(weekly_config() if frequency=='week' else FusionConfig(),trial=.20,min_rebalance=.12)
 
 
@@ -130,7 +130,7 @@ def simulate_v6(prices: pd.DataFrame,base:FusionConfig,c:V6Config)->pd.DataFrame
 
 def ablate(prices: pd.DataFrame,base:FusionConfig,c:V6Config):
     """Targeted ablation; V5 default deliberately preserved as baseline."""
-    from fusion_v5 import weekly_config
+    from history.strategies.fusion_v5 import weekly_config
     old = (weekly_config() if base.frequency=='week' else FusionConfig())
     old=replace(old,cost_per_side=base.cost_per_side)
     return {

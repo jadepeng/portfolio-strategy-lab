@@ -6,10 +6,10 @@ import streamlit as st
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-from fusion_v6 import v6_base,V6Config
-from fusion_v7 import V7Config
-from fusion_v10 import V10Config,simulate_v10,results,TARGETS
-from fusion_v11 import V11Config,signals_v11
+from history.strategies.fusion_v6 import v6_base,V6Config
+from history.strategies.fusion_v7 import V7Config
+from history.strategies.fusion_v10 import V10Config,simulate_v10,results,TARGETS
+from history.strategies.fusion_v11 import V11Config,signals_v11
 from v13.regime_v13 import RegimeConfig,signals_v13
 from v13.daily_state_v13 import DailyExitConfig,simulate
 

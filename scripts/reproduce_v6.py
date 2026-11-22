@@ -4,8 +4,8 @@ import sys,json,hashlib
 from dataclasses import asdict,replace
 import pandas as pd
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
-from fusion_v5 import FusionConfig,weekly_config,create_signals,simulate,metrics
-from fusion_v6 import v6_base,V6Config,signal_v6,simulate_v6
+from history.strategies.fusion_v5 import FusionConfig,weekly_config,create_signals,simulate,metrics
+from history.strategies.fusion_v6 import v6_base,V6Config,signal_v6,simulate_v6
 
 sources={
  'weekly_index':('market_data/longbridge_2016_2026_tech_dividend_prices.csv','week_start','week'),

@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 from v14.market_snapshot import load_weekly
 from v14.crowding import CrowdConfig,OverlayStateConfig,build_factors,classify,state_overlay,trailing_rank
-from fusion_v10 import TARGETS,simulate_v10,V10Config
+from history.strategies.fusion_v10 import TARGETS,simulate_v10,V10Config
 
 @pytest.fixture(scope='module')
 def p():

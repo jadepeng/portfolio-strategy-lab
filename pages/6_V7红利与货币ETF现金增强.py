@@ -8,9 +8,9 @@ import plotly.graph_objects as go
 import streamlit as st
 ROOT=Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
-from fusion_v5 import metrics
-from fusion_v6 import V6Config,v6_base
-from fusion_v7 import V7Config,simulate_v7,signals_v7,eval_cases
+from history.strategies.fusion_v5 import metrics
+from history.strategies.fusion_v6 import V6Config,v6_base
+from history.strategies.fusion_v7 import V7Config,simulate_v7,signals_v7,eval_cases
 st.set_page_config(page_title='V7 红利主仓 + 货币ETF',layout='wide',page_icon='💵')
 st.title('V7｜红利主仓 · 货币ETF现金增强 · 趋势交易')
 st.caption('数据截至2026年11月20日；指标源于可交易ETF历史周收盘价格。这里的“趋势动物”是公开理念的透明代理，不是私有公式。')

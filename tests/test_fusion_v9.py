@@ -6,8 +6,8 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 import pytest
 import numpy as np
 import pandas as pd
-from fusion_v6 import V6Config, v6_base
-from fusion_v7 import V7Config
+from history.strategies.fusion_v6 import V6Config, v6_base
+from history.strategies.fusion_v7 import V7Config
 from history.strategies.fusion_v8 import V8Config, signals_v8
 from history.strategies.fusion_v9 import V9Config, validate_v9, signals_v9, simulate_v9
 

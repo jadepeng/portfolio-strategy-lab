@@ -14,8 +14,8 @@ from dataclasses import dataclass, replace
 from typing import Optional
 import numpy as np
 import pandas as pd
-from fusion_v5 import FusionConfig, metrics
-from fusion_v6 import V6Config, signal_v6, v6_base
+from history.strategies.fusion_v5 import FusionConfig, metrics
+from history.strategies.fusion_v6 import V6Config, signal_v6, v6_base
 
 @dataclass(frozen=True)
 class V7Config:

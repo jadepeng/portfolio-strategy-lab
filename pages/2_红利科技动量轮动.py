@@ -7,7 +7,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from history.strategies.rotation_engine import RotationParams,run_rotation_comparison,rotation_metrics,rotation_windows
-from strategy_engine import to_weekly
+from history.strategies.strategy_engine import to_weekly
 
 ROOT=Path(__file__).resolve().parents[1]
 CACHE=ROOT/'market_data';CACHE.mkdir(exist_ok=True)

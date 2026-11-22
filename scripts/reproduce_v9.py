@@ -6,9 +6,9 @@ import pandas as pd
 import numpy as np
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-from fusion_v5 import metrics
-from fusion_v6 import V6Config, v6_base
-from fusion_v7 import V7Config, simulate_v7
+from history.strategies.fusion_v5 import metrics
+from history.strategies.fusion_v6 import V6Config, v6_base
+from history.strategies.fusion_v7 import V7Config, simulate_v7
 from history.strategies.fusion_v8 import V8Config, simulate_v8
 from history.strategies.fusion_v9 import V9Config, simulate_v9, signals_v9
 from history.strategies.fusion_v9_execution import V9ExecutionConfig, simulate_v9_execution

@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-from strategy_engine import Params, to_weekly, prepare_rate, make_signals, backtest, metrics, run_comparison, test_windows
+from history.strategies.strategy_engine import Params, to_weekly, prepare_rate, make_signals, backtest, metrics, run_comparison, test_windows
 
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / 'market_data'

@@ -7,7 +7,7 @@ import pytest
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-from fusion_v5 import FusionConfig,weekly_config,create_signals,simulate,compare,metrics
+from history.strategies.fusion_v5 import FusionConfig,weekly_config,create_signals,simulate,compare,metrics
 
 
 def daily():

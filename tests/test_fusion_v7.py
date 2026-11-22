@@ -6,9 +6,9 @@ import pandas as pd
 import pytest
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-from fusion_v6 import V6Config,v6_base
-from fusion_v5 import metrics
-from fusion_v7 import V7Config,signals_v7,simulate_v7
+from history.strategies.fusion_v6 import V6Config,v6_base
+from history.strategies.fusion_v5 import metrics
+from history.strategies.fusion_v7 import V7Config,signals_v7,simulate_v7
 
 @pytest.fixture(scope='module')
 def prices():

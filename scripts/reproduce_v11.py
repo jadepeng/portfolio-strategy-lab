@@ -4,10 +4,10 @@ import sys,json,hashlib
 import pandas as pd
 import numpy as np
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
-from fusion_v6 import V6Config,v6_base
-from fusion_v7 import V7Config
-from fusion_v10 import V10Config,signals_v10,simulate_v10,results,TARGETS,fixed_mix_signals
-from fusion_v11 import V11Config,signals_v11,simulate_v11
+from history.strategies.fusion_v6 import V6Config,v6_base
+from history.strategies.fusion_v7 import V7Config
+from history.strategies.fusion_v10 import V10Config,signals_v10,simulate_v10,results,TARGETS,fixed_mix_signals
+from history.strategies.fusion_v11 import V11Config,signals_v11,simulate_v11
 pfile=ROOT/'market_data/longbridge_5asset_fwd_2020_2026_v10.csv'
 p=pd.read_csv(pfile,parse_dates=['week_start']).set_index('week_start')
 base=v6_base('week');model=V6Config();cash=V7Config(red_core=.30,cash_mode='money_price',money_etf_side_cost=.0001)

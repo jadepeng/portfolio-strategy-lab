@@ -10,7 +10,7 @@ Different currencies are NOT pooled or traded as one self-financing account.
 from dataclasses import dataclass
 import numpy as np
 import pandas as pd
-from fusion_v10 import TARGETS
+from history.strategies.fusion_v10 import TARGETS
 from v15.us_strategy import us_factors
 
 @dataclass(frozen=True)

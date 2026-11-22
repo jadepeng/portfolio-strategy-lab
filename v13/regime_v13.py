@@ -8,7 +8,7 @@ Only RESEARCH; retained-window sizes were investigated after 2026.
 from dataclasses import dataclass
 import numpy as np
 import pandas as pd
-from fusion_v10 import TARGETS
+from history.strategies.fusion_v10 import TARGETS
 from v13.animal_state import AnimalConfig, signals_animal
 
 @dataclass(frozen=True)

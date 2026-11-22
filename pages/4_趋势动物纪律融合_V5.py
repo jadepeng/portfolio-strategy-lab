@@ -9,7 +9,7 @@ import streamlit as st
 
 ROOT=Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
-from fusion_v5 import (FusionConfig, weekly_config, create_signals, simulate,
+from history.strategies.fusion_v5 import (FusionConfig, weekly_config, create_signals, simulate,
                        metrics, compare, STAGES)
 from history.strategies.trend_animal_v4 import TrendAnimalV4Config, build_temperature_signals
 

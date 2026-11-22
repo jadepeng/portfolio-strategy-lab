@@ -8,9 +8,9 @@ import plotly.graph_objects as go
 import streamlit as st
 ROOT=Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
-from fusion_v5 import metrics
-from fusion_v6 import v6_base, V6Config
-from fusion_v7 import V7Config, simulate_v7
+from history.strategies.fusion_v5 import metrics
+from history.strategies.fusion_v6 import v6_base, V6Config
+from history.strategies.fusion_v7 import V7Config, simulate_v7
 from history.strategies.fusion_v8 import V8Config, simulate_v8
 from history.strategies.fusion_v9 import V9Config, simulate_v9
 from history.strategies.fusion_v9_execution import V9ExecutionConfig, simulate_v9_execution

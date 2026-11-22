@@ -143,6 +143,7 @@ python -m pytest tests -q
 │   ├── ptms.css            # 现代化交易台样式、门控指示与响应式排版
 │   ├── v21.js              # 策略驾驶舱可视化图表组件
 │   └── v21.css             # 驾驶舱主样式
+├── history/                # 所有旧版策略实现与历史研究报告（兼容现行依赖）
 ├── tests/                  # 完备的单元测试与端到端回归套件
 ├── docs/                   # 详细接口、架构与历史技术方案
 ├── CHANGELOG.md            # 从 V1 到 V22 版本的详细演变历史
@@ -161,7 +162,9 @@ python -m pytest tests -q
 
 ## 📚 旧版策略归档
 
-根目录的历史 V3/V4、V8/V9 策略和 V4—V11 研究报告已整理至 [history/](history/README.md)。保留旧版 Streamlit 页面和回测脚本，它们的模块导入路径已同步修正。V18—V22 正在使用的共享核心模块、线上交易账本和风控逻辑保持不变。
+历史策略实现（V1—V11 的轮动、趋势动物、V5—V11 融合和执行实验）统一放在 [history/strategies/](history/README.md)，V4—V21 研究报告放在 [history/reports/](history/README.md)。根目录不再保留旧版策略实现副本。
+
+为了保证**现行 V18/V20 在线计算、V22 盘中风控、回测和 Streamlit 研究页**兼容，引用这些历史基类的代码统一采用 `history.strategies.*` 导入。仍被现行模型依赖的 `v13/`—`v22/`、`live/` 不迁移；复现脚本、研究页面与历史验证 JSON 保持原路径。详见 [history/README.md](history/README.md)。
 
 ## 📄 开源许可证
 

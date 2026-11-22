@@ -5,10 +5,10 @@ import pandas as pd
 import streamlit as st
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-from fusion_v6 import V6Config,v6_base
-from fusion_v7 import V7Config
-from fusion_v10 import V10Config,signals_v10,simulate_v10,results,TARGETS
-from fusion_v11 import V11Config,signals_v11,simulate_v11
+from history.strategies.fusion_v6 import V6Config,v6_base
+from history.strategies.fusion_v7 import V7Config
+from history.strategies.fusion_v10 import V10Config,signals_v10,simulate_v10,results,TARGETS
+from history.strategies.fusion_v11 import V11Config,signals_v11,simulate_v11
 st.set_page_config(page_title='V11 多周期集成与风险上限',layout='wide')
 st.title('V11 · 多周期集成 / 双窗口风险预算')
 st.caption('研究用途，不自动交易。历史行情截至2026-11-20；周标签为该周开盘日，周末生成信号，下一周收盘模拟成交。')

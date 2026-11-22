@@ -13,11 +13,11 @@ import plotly.graph_objects as go
 
 ROOT=Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
-from fusion_v6 import V6Config, v6_base
-from fusion_v7 import V7Config, simulate_v7
+from history.strategies.fusion_v6 import V6Config, v6_base
+from history.strategies.fusion_v7 import V7Config, simulate_v7
 from history.strategies.fusion_v8 import V8Config
 from history.strategies.fusion_v9 import V9Config, signals_v9
-from fusion_v10 import (
+from history.strategies.fusion_v10 import (
     V10Config,signals_v10,simulate_v10,baseline_5asset_signals,
     fixed_mix_signals,results,TARGETS,PRICES,
 )

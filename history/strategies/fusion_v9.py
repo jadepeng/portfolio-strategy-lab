@@ -10,9 +10,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
 import pandas as pd
-from fusion_v5 import FusionConfig
-from fusion_v6 import V6Config
-from fusion_v7 import V7Config, simulate_v7
+from history.strategies.fusion_v5 import FusionConfig
+from history.strategies.fusion_v6 import V6Config
+from history.strategies.fusion_v7 import V7Config, simulate_v7
 from history.strategies.fusion_v8 import V8Config, signals_v8
 
 
