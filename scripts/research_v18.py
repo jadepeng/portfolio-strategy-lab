@@ -7,10 +7,10 @@ sys.path.insert(0,str(ROOT))
 from dataclasses import replace
 import pandas as pd
 import numpy as np
-from fusion_v6 import V6Config,v6_base
-from fusion_v7 import V7Config
-from fusion_v10 import V10Config,simulate_v10,TARGETS
-from fusion_v11 import V11Config,signals_v11
+from history.strategies.fusion_v6 import V6Config,v6_base
+from history.strategies.fusion_v7 import V7Config
+from history.strategies.fusion_v10 import V10Config,simulate_v10,TARGETS
+from history.strategies.fusion_v11 import V11Config,signals_v11
 from v13.regime_v13 import RegimeConfig,signals_v13
 from v13.animal_state import AnimalConfig
 from v14.market_snapshot import load_weekly

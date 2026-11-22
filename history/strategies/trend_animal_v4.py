@@ -9,7 +9,7 @@ like-for-like costs and performance comparisons.
 from dataclasses import dataclass, replace
 import numpy as np
 import pandas as pd
-from v3_engine import V3Config, _portfolio_backtest, _factor_table
+from history.strategies.v3_engine import V3Config, _portfolio_backtest, _factor_table
 
 STAGES=['冻','寒','凉','平','温','热','沸']
 

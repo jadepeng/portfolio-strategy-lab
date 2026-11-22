@@ -5,9 +5,9 @@ import sys,hashlib,json
 import pandas as pd
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-from fusion_v5 import metrics
-from fusion_v6 import V6Config,v6_base
-from fusion_v7 import eval_cases,simulate_v7,V7Config
+from history.strategies.fusion_v5 import metrics
+from history.strategies.fusion_v6 import V6Config,v6_base
+from history.strategies.fusion_v7 import eval_cases,simulate_v7,V7Config
 path=ROOT/'market_data/longbridge_etf_fwd_2020_2026_v7_money.csv'
 prices=pd.read_csv(path,parse_dates=['week_start']).set_index('week_start')
 assert len(prices)==313

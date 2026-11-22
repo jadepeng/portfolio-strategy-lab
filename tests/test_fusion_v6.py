@@ -5,8 +5,8 @@ import numpy as np
 import pandas as pd
 import pytest
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from fusion_v5 import weekly_config,simulate,create_signals,metrics
-from fusion_v6 import V6Config,v6_base,signal_v6,simulate_v6,config_checks
+from history.strategies.fusion_v5 import weekly_config,simulate,create_signals,metrics
+from history.strategies.fusion_v6 import V6Config,v6_base,signal_v6,simulate_v6,config_checks
 
 ROOT=Path(__file__).resolve().parents[1]
 @pytest.fixture(scope='module')

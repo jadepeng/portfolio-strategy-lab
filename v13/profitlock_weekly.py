@@ -4,7 +4,7 @@ The rule is not Nick's described trend-following exit, but a user risk-budget ov
 """
 from dataclasses import dataclass,replace
 import numpy as np,pandas as pd
-from fusion_v10 import PRICES,TARGETS,V10Config,validate
+from history.strategies.fusion_v10 import PRICES,TARGETS,V10Config,validate
 
 @dataclass(frozen=True)
 class ProfitGuard:

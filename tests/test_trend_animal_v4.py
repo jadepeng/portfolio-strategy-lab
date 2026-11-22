@@ -4,7 +4,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from dataclasses import replace
 import numpy as np
 import pandas as pd
-from trend_animal_v4 import TrendAnimalV4Config,build_temperature_signals,backtest_v4,STAGES
+from history.strategies.trend_animal_v4 import TrendAnimalV4Config,build_temperature_signals,backtest_v4,STAGES
 
 D=pd.date_range('2016-01-04',periods=170,freq='W-MON')
 def sample():

@@ -9,8 +9,8 @@ import streamlit as st
 
 ROOT=Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
-from fusion_v5 import FusionConfig, weekly_config, create_signals, simulate, metrics
-from fusion_v6 import V6Config, v6_base, signal_v6, simulate_v6
+from history.strategies.fusion_v5 import FusionConfig, weekly_config, create_signals, simulate, metrics
+from history.strategies.fusion_v6 import V6Config, v6_base, signal_v6, simulate_v6
 
 st.set_page_config(page_title='V6 红利底仓与趋势风控',layout='wide',page_icon='🛡️')
 st.title('V6｜红利底仓 × 趋势动物纪律 × 红利科技轮动')

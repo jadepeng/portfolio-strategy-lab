@@ -11,7 +11,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 import numpy as np
 import pandas as pd
-from fusion_v10 import V10Config,simulate_v10,PRICES,TARGETS
+from history.strategies.fusion_v10 import V10Config,simulate_v10,PRICES,TARGETS
 from v14.market_snapshot import load_weekly
 from v15.us_snapshot import load_us_prices,load_us_open
 from v16.overnight import DailyGateConfig,load_event_snapshot

@@ -7,12 +7,12 @@ week t+1, with explicit transaction costs. The source signals are not mutated.
 from dataclasses import dataclass, replace
 import numpy as np
 import pandas as pd
-from fusion_v10 import TARGETS, V10Config, simulate_v10
+from history.strategies.fusion_v10 import TARGETS, V10Config, simulate_v10
 from v18.integrated import V18CNConfig, V18USConfig, build_cn_v18_weekly, build_us_v18
 from v15.us_strategy import USConfig, us_signals, simulate_us
-from fusion_v6 import v6_base, V6Config
-from fusion_v7 import V7Config
-from fusion_v11 import V11Config, signals_v11
+from history.strategies.fusion_v6 import v6_base, V6Config
+from history.strategies.fusion_v7 import V7Config
+from history.strategies.fusion_v11 import V11Config, signals_v11
 from v13.regime_v13 import RegimeConfig, signals_v13
 from v14.crowding import build_factors, classify, state_overlay, OverlayStateConfig
 from v15.cross_market import us_to_cn_overlay, CrossConfig

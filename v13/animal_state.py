@@ -1,7 +1,7 @@
 from dataclasses import dataclass,replace
 import pandas as pd,numpy as np
-from fusion_v10 import TARGETS, PRICES
-from fusion_v11 import risk_project,_cov
+from history.strategies.fusion_v10 import TARGETS, PRICES
+from history.strategies.fusion_v11 import risk_project,_cov
 
 @dataclass(frozen=True)
 class AnimalConfig:

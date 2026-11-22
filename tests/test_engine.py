@@ -3,7 +3,7 @@ from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 import numpy as np
 import pandas as pd
-from strategy_engine import Params, make_signals, backtest, metrics
+from history.strategies.strategy_engine import Params, make_signals, backtest, metrics
 
 D = pd.date_range('2015-01-02', periods=80, freq='W-FRI')
 

@@ -9,9 +9,9 @@ import streamlit as st
 
 ROOT=Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
-from fusion_v5 import (FusionConfig, weekly_config, create_signals, simulate,
+from history.strategies.fusion_v5 import (FusionConfig, weekly_config, create_signals, simulate,
                        metrics, compare, STAGES)
-from trend_animal_v4 import TrendAnimalV4Config, build_temperature_signals
+from history.strategies.trend_animal_v4 import TrendAnimalV4Config, build_temperature_signals
 
 st.set_page_config(page_title='V5 趋势动物纪律融合',layout='wide',page_icon='🧭')
 st.title('V5｜趋势温度 × 红利科技动量 × 日频风控')

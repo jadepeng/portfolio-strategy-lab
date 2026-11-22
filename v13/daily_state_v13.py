@@ -6,7 +6,7 @@ This is NOT an implementation of Nick's private 趋势动物 signals.
 from dataclasses import dataclass
 import numpy as np,pandas as pd
 from v13.daily_ohlc_2026 import load
-from fusion_v10 import PRICES,TARGETS,V10Config
+from history.strategies.fusion_v10 import PRICES,TARGETS,V10Config
 
 @dataclass(frozen=True)
 class DailyExitConfig:

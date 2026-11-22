@@ -13,10 +13,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
 import pandas as pd
-from fusion_v6 import v6_base, V6Config
-from fusion_v7 import V7Config
-from fusion_v10 import V10Config, simulate_v10, TARGETS, PRICES
-from fusion_v11 import V11Config, signals_v11
+from history.strategies.fusion_v6 import v6_base, V6Config
+from history.strategies.fusion_v7 import V7Config
+from history.strategies.fusion_v10 import V10Config, simulate_v10, TARGETS, PRICES
+from history.strategies.fusion_v11 import V11Config, signals_v11
 from v13.regime_v13 import RegimeConfig, signals_v13
 from v13.animal_state import AnimalConfig
 from v14.crowding import build_factors, classify, state_overlay, OverlayStateConfig

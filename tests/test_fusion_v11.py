@@ -2,10 +2,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
-from fusion_v6 import V6Config,v6_base
-from fusion_v7 import V7Config
-from fusion_v10 import V10Config,PRICES,TARGETS,simulate_v10
-from fusion_v11 import V11Config,risk_project,signals_v11,simulate_v11,_vol
+from history.strategies.fusion_v6 import V6Config,v6_base
+from history.strategies.fusion_v7 import V7Config
+from history.strategies.fusion_v10 import V10Config,PRICES,TARGETS,simulate_v10
+from history.strategies.fusion_v11 import V11Config,risk_project,signals_v11,simulate_v11,_vol
 
 
 def test_risk_projection_can_reduce_core_if_needed():

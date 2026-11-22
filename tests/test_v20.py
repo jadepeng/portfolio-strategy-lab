@@ -4,7 +4,7 @@ from functools import lru_cache
 import numpy as np
 import pandas as pd
 import pytest
-from fusion_v10 import TARGETS
+from history.strategies.fusion_v10 import TARGETS
 from v14.market_snapshot import load_weekly
 from v15.us_snapshot import load_us_prices,load_us_open
 from v18.integrated import build_us_v18,build_cn_v18_weekly,V18USConfig,V18CNConfig

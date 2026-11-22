@@ -7,7 +7,7 @@ from v16.overnight import (DailyGateConfig,classify_us_daily,close_available_cn,
                            load_event_snapshot,align_events_to_cn_open)
 from v16.daily_replay import run_daily_replay,annual_stats
 from v13.daily_ohlc_2026 import load
-from fusion_v10 import TARGETS,V10Config
+from history.strategies.fusion_v10 import TARGETS,V10Config
 
 @pytest.fixture(scope='module')
 def days():return load()

@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
 import pandas as pd
-from fusion_v10 import TARGETS
+from history.strategies.fusion_v10 import TARGETS
 
 @dataclass(frozen=True)
 class CrowdConfig:

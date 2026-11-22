@@ -4,7 +4,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 import pandas as pd
 import numpy as np
 from dataclasses import replace
-from rotation_engine import RotationParams,align_close,make_rotation_signals,run_rotation_comparison,rotation_metrics
+from history.strategies.rotation_engine import RotationParams,align_close,make_rotation_signals,run_rotation_comparison,rotation_metrics
 
 D=pd.date_range('2018-01-05',periods=160,freq='W-FRI')
 
