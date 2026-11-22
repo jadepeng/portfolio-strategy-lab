@@ -1,0 +1,54 @@
+{
+  "method": "Research, retrospectively calibrated to 2026. No untouched out-of-sample holdout.",
+  "data": "Longbridge 313 matched weekly ETFs, 213 sessions in 2026. Forward-adjusted closes and opens.",
+  "fee_model": "V10 per-side L1 transaction costs; historical simulated fills",
+  "results": [
+    {
+      "model": "V11-A",
+      "all_sample_return_percent": 64.138,
+      "max_drawdown_percent": -6.521,
+      "2022_percent": 0.666,
+      "2024_percent": 10.351,
+      "2025_percent": 22.532,
+      "weekly_close": 0.864,
+      "next_open": 0.69,
+      "daily_urgent_exit": 3.141,
+      "profit_guard": 3.141,
+      "full_sample_turnover": 54.48
+    },
+    {
+      "model": "V13-8week",
+      "all_sample_return_percent": 73.119,
+      "max_drawdown_percent": -9.292,
+      "2022_percent": 0.449,
+      "2024_percent": 7.419,
+      "2025_percent": 20.842,
+      "weekly_close": 11.764,
+      "next_open": 8.85,
+      "daily_urgent_exit": 9.834,
+      "profit_guard": 10.354,
+      "full_sample_turnover": 73.8
+    },
+    {
+      "model": "V13-12week",
+      "all_sample_return_percent": 72.348,
+      "max_drawdown_percent": -9.292,
+      "2022_percent": 0.819,
+      "2024_percent": 7.419,
+      "2025_percent": 21.212,
+      "weekly_close": 10.519,
+      "next_open": 7.513,
+      "daily_urgent_exit": 8.322,
+      "profit_guard": 10.278,
+      "full_sample_turnover": 75.16
+    }
+  ],
+  "latest_model_target": {
+    "target_tech": 0.0,
+    "target_red": 0.44,
+    "target_bond": 0.3,
+    "target_gold": 0.0,
+    "target_money": 0.26
+  },
+  "guard_first_day": "2026-05-18"
+}

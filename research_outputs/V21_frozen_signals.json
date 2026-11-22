@@ -1,0 +1,41 @@
+[
+  {
+    "version": "V21-RESEARCH-ONLY",
+    "market": "CN",
+    "cutoff": "2026-11-20",
+    "source_week_start": "2026-11-16",
+    "target_weights": {
+      "tech": 0.0,
+      "red": 0.44,
+      "bond": 0.35,
+      "gold": 0.0,
+      "money": 0.21
+    },
+    "assumptions": {
+      "fill": "next_week_close",
+      "default": "V18_CN_35_20",
+      "proactive_2026_selected": false
+    },
+    "source_sha256": "c70686ea281c7705a4a13b07eaba7b6b5829384a3bf7767f8fa320c4457f7891",
+    "record_type": "research_snapshot_not_submitted_order",
+    "record_sha256": "9b8d3f37d86e0ee5890a8290aaf4abf119869d90630ef807b88c5d3be786df6a"
+  },
+  {
+    "version": "V21-RESEARCH-ONLY",
+    "market": "US",
+    "cutoff": "2026-11-20",
+    "source_week_start": "2026-11-16",
+    "target_weights": {
+      "qqq": 0.3,
+      "bil": 0.7
+    },
+    "assumptions": {
+      "fill": "next_week_open",
+      "default": "V18_US_30core",
+      "optional_filter": "V20_G_research_only"
+    },
+    "source_sha256": "6a612b63361835243ef67c98cbdd6f268554d04a012f2bf7d4aef0bc5f399595",
+    "record_type": "research_snapshot_not_submitted_order",
+    "record_sha256": "21acb1f5578ceae9b2477e3b02d58b9d94d7b6b5295f5ea949cc7b9a74c1b387"
+  }
+]

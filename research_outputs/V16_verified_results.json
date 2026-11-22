@@ -1,0 +1,166 @@
+{
+  "version": "V16 daily US-to-CN research",
+  "effective_through_CN": "2026-11-20",
+  "us_event_snapshot_last_close": "2026-11-20 NY16:00 (2026-11-21 CN05:00); not tradable before the following Chinese session",
+  "CN_bars": 213,
+  "US_observed_moderate_severe_events": 34,
+  "events_mapped_to_2026_CN_open": 33,
+  "accounting": "CN weekly prior-week signal fills at this week final A close; emergency US shock fills at A next-open, same for all variants",
+  "benchmark_caveat": "US event subset; live feed must supply COMPLETE daily closes; historical parameters were selected after observing 2026",
+  "results": [
+    {
+      "weekly_base": "V14 China (no weekly US gate)",
+      "daily_mode": "off",
+      "annual_pct": 13.262,
+      "mdd_pct": -6.004,
+      "last_nav": 1.133,
+      "emergency_days": 0,
+      "weekly_rebalance_days": 18,
+      "emergency_cost_pct_initial": 0.0,
+      "2026_weekly_reference_pct": 13.262
+    },
+    {
+      "weekly_base": "V14 China (no weekly US gate)",
+      "daily_mode": "freeze",
+      "annual_pct": 12.677,
+      "mdd_pct": -6.004,
+      "last_nav": 1.127,
+      "emergency_days": 0,
+      "weekly_rebalance_days": 18,
+      "emergency_cost_pct_initial": 0.0,
+      "2026_weekly_reference_pct": 13.262
+    },
+    {
+      "weekly_base": "V14 China (no weekly US gate)",
+      "daily_mode": "halve",
+      "annual_pct": 8.727,
+      "mdd_pct": -6.089,
+      "last_nav": 1.087,
+      "emergency_days": 3,
+      "weekly_rebalance_days": 17,
+      "emergency_cost_pct_initial": 0.1637,
+      "2026_weekly_reference_pct": 13.262
+    },
+    {
+      "weekly_base": "V14 China (no weekly US gate)",
+      "daily_mode": "full_exit",
+      "annual_pct": 6.37,
+      "mdd_pct": -8.093,
+      "last_nav": 1.064,
+      "emergency_days": 1,
+      "weekly_rebalance_days": 16,
+      "emergency_cost_pct_initial": 0.192,
+      "2026_weekly_reference_pct": 13.262
+    },
+    {
+      "weekly_base": "V14 China (no weekly US gate)",
+      "daily_mode": "freeze_local",
+      "annual_pct": 16.4,
+      "mdd_pct": -6.004,
+      "last_nav": 1.164,
+      "emergency_days": 0,
+      "weekly_rebalance_days": 16,
+      "emergency_cost_pct_initial": 0.0,
+      "2026_weekly_reference_pct": 13.262
+    },
+    {
+      "weekly_base": "V14 China (no weekly US gate)",
+      "daily_mode": "halve_local",
+      "annual_pct": 11.966,
+      "mdd_pct": -6.089,
+      "last_nav": 1.12,
+      "emergency_days": 1,
+      "weekly_rebalance_days": 16,
+      "emergency_cost_pct_initial": 0.0971,
+      "2026_weekly_reference_pct": 13.262
+    },
+    {
+      "weekly_base": "V14 China (no weekly US gate)",
+      "daily_mode": "exit_local",
+      "annual_pct": 7.534,
+      "mdd_pct": -8.093,
+      "last_nav": 1.075,
+      "emergency_days": 1,
+      "weekly_rebalance_days": 16,
+      "emergency_cost_pct_initial": 0.1941,
+      "2026_weekly_reference_pct": 13.262
+    },
+    {
+      "weekly_base": "V15 China (weekly US gate)",
+      "daily_mode": "off",
+      "annual_pct": 13.245,
+      "mdd_pct": -6.004,
+      "last_nav": 1.132,
+      "emergency_days": 0,
+      "weekly_rebalance_days": 18,
+      "emergency_cost_pct_initial": 0.0,
+      "2026_weekly_reference_pct": 13.245
+    },
+    {
+      "weekly_base": "V15 China (weekly US gate)",
+      "daily_mode": "freeze",
+      "annual_pct": 12.661,
+      "mdd_pct": -6.004,
+      "last_nav": 1.127,
+      "emergency_days": 0,
+      "weekly_rebalance_days": 18,
+      "emergency_cost_pct_initial": 0.0,
+      "2026_weekly_reference_pct": 13.245
+    },
+    {
+      "weekly_base": "V15 China (weekly US gate)",
+      "daily_mode": "halve",
+      "annual_pct": 8.711,
+      "mdd_pct": -6.089,
+      "last_nav": 1.087,
+      "emergency_days": 3,
+      "weekly_rebalance_days": 17,
+      "emergency_cost_pct_initial": 0.1636,
+      "2026_weekly_reference_pct": 13.245
+    },
+    {
+      "weekly_base": "V15 China (weekly US gate)",
+      "daily_mode": "full_exit",
+      "annual_pct": 6.355,
+      "mdd_pct": -8.093,
+      "last_nav": 1.064,
+      "emergency_days": 1,
+      "weekly_rebalance_days": 16,
+      "emergency_cost_pct_initial": 0.192,
+      "2026_weekly_reference_pct": 13.245
+    },
+    {
+      "weekly_base": "V15 China (weekly US gate)",
+      "daily_mode": "freeze_local",
+      "annual_pct": 16.383,
+      "mdd_pct": -6.004,
+      "last_nav": 1.164,
+      "emergency_days": 0,
+      "weekly_rebalance_days": 16,
+      "emergency_cost_pct_initial": 0.0,
+      "2026_weekly_reference_pct": 13.245
+    },
+    {
+      "weekly_base": "V15 China (weekly US gate)",
+      "daily_mode": "halve_local",
+      "annual_pct": 11.949,
+      "mdd_pct": -6.089,
+      "last_nav": 1.119,
+      "emergency_days": 1,
+      "weekly_rebalance_days": 16,
+      "emergency_cost_pct_initial": 0.097,
+      "2026_weekly_reference_pct": 13.245
+    },
+    {
+      "weekly_base": "V15 China (weekly US gate)",
+      "daily_mode": "exit_local",
+      "annual_pct": 7.518,
+      "mdd_pct": -8.093,
+      "last_nav": 1.075,
+      "emergency_days": 1,
+      "weekly_rebalance_days": 16,
+      "emergency_cost_pct_initial": 0.1941,
+      "2026_weekly_reference_pct": 13.245
+    }
+  ]
+}

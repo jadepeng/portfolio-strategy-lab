@@ -1,0 +1,4 @@
+model,all_sample_return_percent,max_drawdown_percent,2022_percent,2024_percent,2025_percent,weekly_close,next_open,daily_urgent_exit,profit_guard,full_sample_turnover
+V11-A,64.138,-6.521,0.666,10.351,22.532,0.864,0.69,3.141,3.141,54.48
+V13-8week,73.119,-9.292,0.449,7.419,20.842,11.764,8.85,9.834,10.354,73.8
+V13-12week,72.348,-9.292,0.819,7.419,21.212,10.519,7.513,8.322,10.278,75.16

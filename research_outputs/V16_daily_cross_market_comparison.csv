@@ -1,0 +1,15 @@
+﻿weekly_base,daily_mode,annual_pct,mdd_pct,last_nav,emergency_days,weekly_rebalance_days,emergency_cost_pct_initial,2026_weekly_reference_pct
+V14 China (no weekly US gate),off,13.262,-6.004,1.133,0,18,0.0,13.262
+V14 China (no weekly US gate),freeze,12.677,-6.004,1.127,0,18,0.0,13.262
+V14 China (no weekly US gate),halve,8.727,-6.089,1.087,3,17,0.1637,13.262
+V14 China (no weekly US gate),full_exit,6.37,-8.093,1.064,1,16,0.192,13.262
+V14 China (no weekly US gate),freeze_local,16.4,-6.004,1.164,0,16,0.0,13.262
+V14 China (no weekly US gate),halve_local,11.966,-6.089,1.12,1,16,0.0971,13.262
+V14 China (no weekly US gate),exit_local,7.534,-8.093,1.075,1,16,0.1941,13.262
+V15 China (weekly US gate),off,13.245,-6.004,1.132,0,18,0.0,13.245
+V15 China (weekly US gate),freeze,12.661,-6.004,1.127,0,18,0.0,13.245
+V15 China (weekly US gate),halve,8.711,-6.089,1.087,3,17,0.1636,13.245
+V15 China (weekly US gate),full_exit,6.355,-8.093,1.064,1,16,0.192,13.245
+V15 China (weekly US gate),freeze_local,16.383,-6.004,1.164,0,16,0.0,13.245
+V15 China (weekly US gate),halve_local,11.949,-6.089,1.119,1,16,0.097,13.245
+V15 China (weekly US gate),exit_local,7.518,-8.093,1.075,1,16,0.1941,13.245

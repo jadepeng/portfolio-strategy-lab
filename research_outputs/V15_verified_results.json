@@ -1,0 +1,72 @@
+{
+  "version": "V15 research",
+  "China_lag_logic": "Chinese week t cannot use US Friday close of same week; US t-1 is used in CN t signal",
+  "price_through": "2026-11-20",
+  "us_prices": {
+    "start": "2020-11-23",
+    "end": "2026-11-16",
+    "count": 313,
+    "source": "Longbridge weekly forward-adjusted, rounded to cents"
+  },
+  "CN_latest_weights": {
+    "target_tech": 0.0,
+    "target_red": 0.43999999999999995,
+    "target_bond": 0.3,
+    "target_gold": 0.0,
+    "target_money": 0.26000000000000006
+  },
+  "CN_latest_US_source_week": "2026-11-09",
+  "CN_latest_US_gate": "熊市趋势",
+  "US_latest_target": {
+    "target_qqq": 0.3,
+    "target_bil": 0.7
+  },
+  "results": [
+    {
+      "strategy": "A股 V14（无美股影响）",
+      "total_pct": 78.46,
+      "mdd_pct": -9.387,
+      "2024_pct": 9.285,
+      "2025_pct": 20.824,
+      "2026_pct": 13.262,
+      "weeks": 313
+    },
+    {
+      "strategy": "A股 V15（美股风险闸门）",
+      "total_pct": 79.421,
+      "mdd_pct": -9.387,
+      "2024_pct": 9.285,
+      "2025_pct": 20.824,
+      "2026_pct": 13.245,
+      "weeks": 313
+    },
+    {
+      "strategy": "美股QQQ全战术30周",
+      "total_pct": 84.174,
+      "mdd_pct": -23.53,
+      "2024_pct": 21.788,
+      "2025_pct": 12.164,
+      "2026_pct": 10.995,
+      "weeks": 313
+    },
+    {
+      "strategy": "美股30%核心+70%战术",
+      "total_pct": 94.632,
+      "mdd_pct": -25.566,
+      "2024_pct": 23.466,
+      "2025_pct": 14.771,
+      "2026_pct": 7.649,
+      "weeks": 313
+    },
+    {
+      "strategy": "美股QQQ长期持有",
+      "total_pct": 110.792,
+      "mdd_pct": -35.056,
+      "2024_pct": 27.384,
+      "2025_pct": 18.831,
+      "2026_pct": -0.424,
+      "weeks": 313
+    }
+  ],
+  "posthoc_selection_warning": true
+}

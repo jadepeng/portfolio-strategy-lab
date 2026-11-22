@@ -1,0 +1,7 @@
+﻿variant,ret26_pct,mdd26_pct,sharpe,calmar,weekly_rebal,emergency_days
+V16_base_off (Fri close),13.245,-6.004,1.016,2.21,18,0
+V16_halve (Fri close),8.711,-6.089,0.688,1.43,17,3
+V16_freeze_local_MA5 (Fri close),16.383,-6.004,1.277,2.73,16,0
+V17_weekly_off (Fri close),12.375,-4.877,1.035,2.54,23,0
+V17_weekly_freeze_MA5 (Fri close),15.661,-4.806,1.341,3.26,21,0
+V17_weekly_freeze_MA5 (Mon open),12.54,-5.973,1.073,2.1,23,0

@@ -1,0 +1,30 @@
+{
+  "CN_price": {
+    "weeks": 313,
+    "first": "2020-10-12",
+    "last": "2026-11-16"
+  },
+  "US_price": {
+    "weeks": 313,
+    "first": "2020-11-23",
+    "last": "2026-11-16"
+  },
+  "US_week_open": {
+    "weeks": 313,
+    "first": "2020-11-23",
+    "last": "2026-11-16"
+  },
+  "CN_skipped_full_week_holidays": [
+    "2022-01-31",
+    "2022-10-03",
+    "2023-01-23",
+    "2023-10-02",
+    "2024-02-12",
+    "2026-02-16"
+  ],
+  "US_lagged_mapping": {
+    "checked": 306,
+    "last_cn_week": "2026-11-16",
+    "last_observed_US_week": "2026-11-09"
+  }
+}

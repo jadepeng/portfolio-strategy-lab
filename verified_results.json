@@ -1,0 +1,56 @@
+{
+  "as_of": "2026-11-20",
+  "data_source": "Longbridge 周线指数收盘：NDX.US, 399006.SZ, TLT.US",
+  "date_range": "2015-01-01 to 2026-11-20",
+  "execution": "周线收盘产生信号，下一周持有目标仓位；单程调仓成本15bp；现金零收益；指数价格不含股息",
+  "warning": "历史样本内模拟，参数并非样本外最优；基准是指数价格而非真实ETF；不直接等价于当前账户买卖决策",
+  "parameters": {
+    "ma_warning_weeks": 10,
+    "ma_defense_weeks": 30,
+    "drawdown_warning": 0.08,
+    "drawdown_defense": 0.12,
+    "drawdown_extreme": 0.20,
+    "supplementary_extreme_rule": "跌破30周线且从26周高点回撤至少16%",
+    "macro_proxy": "TLT近8周跌幅至少4.5%，纳指距离26周高点不超过6%，纳指8周收益不低于-1%",
+    "macro_applies_only_to": "Nasdaq 100"
+  },
+  "long_run": {
+    "NASDAQ100": {
+      "buy_hold": {"total_return_pct": 494.0, "cagr_pct": 16.1, "max_drawdown_pct": -35.5, "volatility_pct": 20.3},
+      "ma30": {"total_return_pct": 343.8, "cagr_pct": 13.3, "max_drawdown_pct": -21.8, "volatility_pct": 15.5},
+      "risk_3gate": {"total_return_pct": 301.1, "cagr_pct": 12.4, "max_drawdown_pct": -25.8, "volatility_pct": 15.0},
+      "risk_no_macro": {"total_return_pct": 305.0, "cagr_pct": 12.5, "max_drawdown_pct": -25.8, "volatility_pct": 15.4}
+    },
+    "ChiNext": {
+      "buy_hold": {"total_return_pct": 42.4, "cagr_pct": 3.1, "max_drawdown_pct": -68.1, "volatility_pct": 30.0},
+      "ma30": {"total_return_pct": 57.3, "cagr_pct": 4.0, "max_drawdown_pct": -70.8, "volatility_pct": 21.9},
+      "risk_3gate": {"total_return_pct": 93.7, "cagr_pct": 5.8, "max_drawdown_pct": -59.2, "volatility_pct": 20.7}
+    }
+  },
+  "crisis_windows": {
+    "2015-2016": {"NASDAQ100": {"hold_pct": -4.0, "risk_pct": -6.6}, "ChiNext": {"hold_pct": -46.2, "risk_pct": -31.7}},
+    "2018": {"NASDAQ100": {"hold_pct": -3.5, "risk_pct": -1.6}, "ChiNext": {"hold_pct": -30.9, "risk_pct": -23.5}},
+    "2020_v_rebound": {"NASDAQ100": {"hold_pct": 23.6, "risk_pct": 19.1}, "ChiNext": {"hold_pct": 35.5, "risk_pct": 33.0}},
+    "2022": {"NASDAQ100": {"hold_pct": -29.8, "risk_pct": -20.5}, "ChiNext": {"hold_pct": -24.2, "risk_pct": -20.1}},
+    "2026-09-28_to_2026-11-20": {
+      "NASDAQ100": {"hold_pct": -18.8, "ma30_pct": -6.1, "risk_pct": -11.1, "risk_without_macro_pct": -12.3},
+      "ChiNext": {"hold_pct": -29.4, "ma30_pct": 0.0, "risk_pct": -8.1}
+    }
+  },
+  "last_week": {
+    "NASDAQ100": {"week_open_date": "2026-11-16", "last_week_close": 25028.982, "last_executed_weight": 0.50, "next_week_target_weight": 0.25, "reason": "跌破均线 + 深度回撤触发极端防御"},
+    "ChiNext": {"week_open_date": "2026-11-16", "last_week_close": 2212.13, "last_executed_weight": 0.25, "next_week_target_weight": 0.25, "reason": "保持极端防御"}
+  },
+  "verified_latest_signals": {
+    "NASDAQ100": [
+      {"week": "2026-08-17", "weight": 0.75, "reason": "TLT背离"},
+      {"week": "2026-09-28", "weight": 0.75, "reason": "TLT背离"},
+      {"week": "2026-10-19", "weight": 0.50, "reason": "趋势破位"},
+      {"week": "2026-11-16", "weight": 0.25, "reason": "深度回撤"}
+    ],
+    "ChiNext": [
+      {"week": "2026-08-10", "weight": 0.50, "reason": "趋势破位"},
+      {"week": "2026-08-17", "weight": 0.25, "reason": "深度回撤"}
+    ]
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "study_date": "2026-11-21",
+  "price_through": "2026-11-20",
+  "volume_weeks": 150,
+  "warning_source": "index-basket proxy, not CICC top-5-stock concentration",
+  "method": "weekly close signal -> next weekly close; daily next-open separate 2026 simulation",
+  "baseline": {
+    "version": "V13-8 baseline",
+    "all_total_pct": 73.119,
+    "mdd_pct": -9.292,
+    "2024_pct": 7.419,
+    "2025_pct": 20.842,
+    "2026_pct": 11.764,
+    "turnover": 73.8,
+    "weeks_changed": 0,
+    "2026_next_open_pct": 8.85,
+    "2026_daily_stop_pct": 9.841,
+    "2026_year_profit_guard_pct": 10.354
+  },
+  "recommended_experiment": {
+    "version": "V14-H freeze 3 weeks",
+    "all_total_pct": 78.46,
+    "mdd_pct": -9.387,
+    "2024_pct": 9.285,
+    "2025_pct": 20.824,
+    "2026_pct": 13.262,
+    "turnover": 71.64,
+    "weeks_changed": 15,
+    "2026_next_open_pct": 13.156,
+    "2026_daily_stop_pct": 13.518,
+    "2026_year_profit_guard_pct": 11.967
+  },
+  "latest_market_regime": "偏熊市（缩量破位）",
+  "latest_target": {
+    "target_tech": 0.0,
+    "target_red": 0.44,
+    "target_bond": 0.3,
+    "target_gold": 0.0,
+    "target_money": 0.26
+  },
+  "no_forward_validation": true
+}

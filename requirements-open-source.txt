@@ -1,0 +1,5 @@
+# Small composable stack; no standalone trading platform is required.
+-r requirements.txt
+efinance>=0.5.9,<0.6
+bt>=1.1,<2
+exchange-calendars>=4.11,<5

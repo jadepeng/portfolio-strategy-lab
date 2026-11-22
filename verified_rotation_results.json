@@ -1,0 +1,43 @@
+{
+  "snapshot_created": "2026-11-21",
+  "last_complete_week": "2026-11-20",
+  "market_data_vendor": "Longbridge 历史周K",
+  "assets": {"technology": "399006.SZ 创业板指数（价格）", "dividend": "000922.SH 中证红利指数（价格）"},
+  "period": "2016-01-11 to 2026-11-20",
+  "matched_weeks": 555,
+  "rules": "12/26周相对动量，60/40加权；30周绝对趋势；4个百分点切换缓冲；常规每4周重新配置；科技指数每周检查8%、12%、20%滚动26周回撤等破位风控，目标持仓最多80%；不允许杠杆；下周执行；每单位换手15bp成本；现金收益0",
+  "warnings": [
+    "中证红利000922.SH是价格指数，不包括红利再投资，不能把结果当成红利基金真实累计回报",
+    "策略参数由历史经验设定并在同一历史时期检视，没有完成严格滚动样本外检验",
+    "周收盘信号、后续周收益受仓位影响；未模拟隔夜跳空、基金净值折溢价、税费和汇率",
+    "这是指数代理策略，不代表个人当前真实持仓，也不构成直接减仓指令"
+  ],
+  "primary_model": "12/26周动量+4周轮动+30周趋势+科技破位周度限仓，无绝对比值倾斜",
+  "all_history": {
+    "科技买入持有": {"cumulative_return_pct": 4.7, "cagr_pct": 0.4, "max_drawdown_pct": -56.0},
+    "红利买入持有": {"cumulative_return_pct": 52.5, "cagr_pct": 4.0, "max_drawdown_pct": -27.7},
+    "50/50定期再平衡": {"cumulative_return_pct": 35.5, "cagr_pct": 2.9, "max_drawdown_pct": -36.1},
+    "动量轮动+风险闸门": {"cumulative_return_pct": -6.7, "cagr_pct": -0.6, "max_drawdown_pct": -50.8, "sum_absolute_turnover": 99.4, "weeks_with_material_trades": 107},
+    "4/12周短动量版": {"cumulative_return_pct": -21.6, "cagr_pct": -2.3, "max_drawdown_pct": -52.0},
+    "12/26周缓冲扩大到6个百分点": {"cumulative_return_pct": 3.1, "cagr_pct": 0.3, "max_drawdown_pct": -50.8},
+    "12/26周无风险闸门版": {"cumulative_return_pct": 1.2, "cagr_pct": 0.1, "max_drawdown_pct": -50.7}
+  },
+  "stress_test": {
+    "2018": {"科技持有": -30.9, "红利持有": -22.0, "50/50": -26.3, "动量风控": -22.0},
+    "2020-02-to-08": {"科技持有": 35.5, "红利持有": 11.3, "50/50": 23.1, "动量风控": 24.4},
+    "2022": {"科技持有": -24.2, "红利持有": -7.0, "50/50": -15.4, "动量风控": -18.6},
+    "2026-09-28-to-11-20": {"科技持有": -29.4, "红利持有": 0.7, "50/50": -15.3, "动量风控": -4.2}
+  },
+  "latest_model_signal": {
+    "as_of": "2026-11-20",
+    "price_tech": 2212.13,
+    "price_red": 5529.78,
+    "index_ratio": 0.4000394229,
+    "momentum_tech": -0.3877384,
+    "momentum_red": -0.0181586,
+    "next_week_tech_weight": 0,
+    "next_week_red_weight": 0,
+    "next_week_cash_weight": 1,
+    "scope": "仅模型战术轮动资金"
+  }
+}

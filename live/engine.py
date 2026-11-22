@@ -1,0 +1,202 @@
+"""Recompute existing V18/V20 engines using a separate, coherent live dataset."""
+from __future__ import annotations
+
+import hashlib
+import pandas as pd
+
+from live.market import SYMBOLS, ZONES, RISK_SYMBOLS, validate_frame
+from live.backtest import run_bt_reference
+from v18.integrated import build_cn_v18_weekly, build_us_v18
+from v20.integrated import run_advisory_cn, run_advisory_us, run_cn_v20, run_us_v20
+from v20.public_rules import V20Config
+from v21.analytics import describe, equity_curve, yearly, latest_weights, frozen_signal_record, verify_market_history
+from v22.intraday import StopConfig, IntradayStopEngine, normalize_bars, stop_line
+
+
+def weekly_prices(daily, market, clock, now):
+    closes, opens, dates, completed = {}, {}, [], {}
+    for symbol, (_, region, key, _) in SYMBOLS.items():
+        if region != market:
+            continue
+        frame = clock.complete_daily(validate_frame(daily[symbol]['adjusted']), market, now)
+        if frame.empty:
+            raise ValueError('没有已完成日线：' + symbol)
+        closes[key], opens[key] = frame.close, frame.open
+        completed[symbol] = frame
+        dates.append(str(frame.index[-1].date()))
+    if len(set(dates)) != 1:
+        raise ValueError('资产末日不一致，拒绝混合过期价格')
+    p, op = pd.DataFrame(closes), pd.DataFrame(opens)
+    start = max(s.first_valid_index() for s in closes.values())
+    p, op = p.loc[start:], op.loc[start:]
+    if p.isna().any().any() or op.isna().any().any():
+        raise ValueError('资产日线缺失，未填充虚构价格')
+    labels = p.index.to_period('W-SUN').start_time
+    p, op = p.groupby(labels).last(), op.groupby(labels).first()
+    keep = [clock.week_complete(t, market, now) for t in p.index]
+    p, op = p.loc[keep], op.loc[keep]
+    p.index.name = op.index.name = 'week_start'
+    verify_market_history(p, label=market)
+    cutoff = max(f.index[f.index.to_period('W-SUN').start_time == p.index[-1]][-1] for f in completed.values())
+    return p, op, str(cutoff.date())
+
+
+def weekly_tape(tape, cn, clock, now):
+    parts = {}
+    for key in ('market', 'tech', 'star', 'red'):
+        # complete_daily needs open/close; index turnover is never ETF volume.
+        f = tape[key].copy()
+        f['open'] = f.close
+        f = clock.complete_daily(f, 'CN', now)
+        parts[key] = f
+    if len({f.index[-1] for f in parts.values()}) != 1:
+        raise ValueError('指数成交额数据日期不一致')
+    combined = pd.concat({k: f.turnover for k, f in parts.items()}, axis=1)
+    combined = combined.loc[max(f.index[0] for f in parts.values()):]
+    if combined.isna().any().any():
+        raise ValueError('指数成交额缺失，不能生成拥挤度信号')
+    labels = combined.index.to_period('W-SUN').start_time
+    out = combined.groupby(labels).mean().rename(columns={k: k+'_turn_100m' for k in parts}) / 1e8
+    out['market_close'] = parts['market'].close.groupby(parts['market'].index.to_period('W-SUN').start_time).last()
+    out = out.loc[[clock.week_complete(t, 'CN', now) for t in out.index]]
+    out = out.loc[out.index.isin(cn.index)]
+    if len(out) < 52 or out.index[-1] != cn.index[-1]:
+        raise ValueError('指数量能没有覆盖最新完整周或不足52周')
+    return out
+
+
+def pack_models(region, variants, cutoff):
+    cols = tuple('held_'+x for x in (('tech', 'red', 'bond', 'gold', 'money') if region == 'CN' else ('qqq', 'bil')))
+    output = {}
+    for key, (label, signals, ledger) in variants.items():
+        output[key] = {'key': key, 'label': label, 'metrics': describe(ledger),
+                       'target': latest_weights(signals, tuple(c.replace('held_', 'target_') for c in cols)),
+                       'held': {c.removeprefix('held_'): float(ledger.iloc[-1][c]) for c in cols},
+                       'history': equity_curve(ledger, cols=cols), 'annual': yearly(ledger),
+                       'cutoff': cutoff, 'signalWeek': str(signals.index[-1].date()),
+                       'tradeAtNextWeek': True, 'lastReason': str(signals.iloc[-1].get('cross_market_reason', signals.iloc[-1].get('us_trend_decision', ''))),
+                       'riskState': str(signals.iloc[-1].get('us_risk_state', '以本地趋势与量能决定')),
+                       'origin': 'online_recomputed_simulation'}
+    return output
+
+
+def recompute(daily, tape, clock, now, source):
+    """Each market fails independently. Never extend frozen Longbridge snapshots.
+
+    Re-downloaded adjusted history can revise old simulations; these results are
+    labeled online recomputations, not stitched onto the frozen research NAV.
+    """
+    result = {'models': {}, 'signals': {}, 'quality': [], 'frozen_signals': [],
+              'liquidity': [], 'strategy_status': {}, 'external_backtests': {}, 'computed_at': now.isoformat()}
+    prices, opens, cutoffs = {}, {}, {}
+    for market in ('CN', 'US'):
+        try:
+            prices[market], opens[market], cutoffs[market] = weekly_prices(daily, market, clock, now)
+        except (ValueError, KeyError, IndexError) as error:
+            result['strategy_status'][market] = {'state': 'unavailable', 'message': str(error)}
+    if 'US' in prices:
+        try:
+            p, op = prices['US'], opens['US']
+            base, hist = build_us_v18(p, opens=op)
+            _, advisory, _, ahist = run_advisory_us(p, op)
+            blend = run_us_v20(p, op, V20Config(us_blend=.25))
+            result['models']['US'] = pack_models('US', {
+                'baseline': ('V18 多周期趋势 · 在线重算', base, hist),
+                'advisory': ('V20 双重否决 · 在线研究', advisory, ahist),
+                'blend25': ('25%公开规则融合 · 在线研究', blend['signal'], blend['ledger'])}, cutoffs['US'])
+            sig = base.iloc[-1]
+            try:
+                result['external_backtests']['US'] = run_bt_reference(p, base, 'US')
+            except Exception as error:
+                result['external_backtests']['US'] = {'state': 'failed', 'message': type(error).__name__ + '：bt 对照失败'}
+            result['signals']['US'] = {'risk': str(sig.get('us_risk_state', '')),
+                'trend_score': float(sig.get('us_v17_trend_score', 0)), 'qqq_close': float(p.QQQ.iloc[-1]),
+                'qqq_ma30': float(p.QQQ.tail(30).mean()), 'spy_close': float(p.SPY.iloc[-1]),
+                'vol_multiplier': float(sig.get('us_v17_vol_mult', 1)), 'description': str(sig.us_trend_decision)}
+        except Exception as error:
+            result['strategy_status']['US'] = {'state': 'unavailable', 'message': type(error).__name__ + '：策略重算失败'}
+    if 'CN' in prices and 'US' in prices:
+        try:
+            # The legacy cross-market mapper shifts on the U.S. index. If its
+            # current-week row is absent, ffill would accidentally lag two weeks.
+            # Wait for the U.S. completed week rather than insert a fake bar.
+            if prices['US'].index[-1] < prices['CN'].index[-1]:
+                raise ValueError('本周美股尚未完整收盘或数据滞后，等待跨市场完整周输入后重算A股')
+            p = prices['CN']
+            market_tape = weekly_tape(tape, p, clock, now)
+            _, base, hist = build_cn_v18_weekly(p, market_tape, prices['US'])
+            _, advisory, _, ahist = run_advisory_cn(p, market_tape, prices['US'])
+            blend = run_cn_v20(p, market_tape, prices['US'], V20Config(cn_blend=.25))
+            result['models']['CN'] = pack_models('CN', {
+                'baseline': ('V18 五资产轮动 · 在线重算', base, hist),
+                'advisory': ('V20 双重否决 · 在线研究', advisory, ahist),
+                'blend25': ('25%公开规则融合 · 在线研究', blend['signal'], blend['ledger'])}, cutoffs['CN'])
+            sig = base.iloc[-1]
+            try:
+                result['external_backtests']['CN'] = run_bt_reference(p, base, 'CN')
+            except Exception as error:
+                result['external_backtests']['CN'] = {'state': 'failed', 'message': type(error).__name__ + '：bt 对照失败'}
+            ratio = market_tape.market_turn_100m.rolling(4).mean() / market_tape.market_turn_100m.rolling(13).mean()
+            result['signals']['CN'] = {'growth_stage': str(sig.get('tech_stage', '')),
+                'red_stage': str(sig.get('red_stage', '')), 'market_weak': bool(sig.get('market_weak', False)),
+                'tech_momentum_13w': float(sig.get('tech_mom_fast', 0)), 'market_liquidity_ratio': float(ratio.iloc[-1]),
+                'cross_market': str(sig.get('us_risk_state_lagged', '')), 'description': str(sig.get('cross_market_reason', ''))}
+            result['liquidity'] = [{'d': str(t.date()), 'market_turn_100m': float(r.market_turn_100m),
+                'market_close': float(r.market_close), 'tech_share_pct': float(r.tech_turn_100m/r.market_turn_100m*100),
+                'red_share_pct': float(r.red_turn_100m/r.market_turn_100m*100),
+                'volume_ratio_4_13': None if pd.isna(ratio.loc[t]) else float(ratio.loc[t])} for t, r in market_tape.iterrows()]
+        except Exception as error:
+            result['strategy_status']['CN'] = {'state': 'unavailable', 'message': str(error) if isinstance(error, (ValueError, KeyError)) else type(error).__name__ + '：策略重算失败'}
+    elif 'CN' in prices:
+        result['strategy_status']['CN'] = {'state': 'unavailable', 'message': '美股跨市场输入缺失，保留历史信号'}
+    for market, models in result['models'].items():
+        cutoff, p = cutoffs[market], prices[market]
+        up_to_date = p.index[-1] == clock.latest_week(market, now)
+        # Conservative fallback: incomplete calendars are never advertised as verified.
+        state = 'current' if up_to_date and clock.status(market, now)['state'] != 'calendar_unverified' else 'unverified' if up_to_date else 'stale'
+        result['strategy_status'][market] = {'state': state, 'cutoff': cutoff,
+            'message': f'完整周信号截至 {cutoff}；' + ('新交易周生效' if state == 'current' else '行情过期，暂停形成新执行建议' if state == 'stale' else '交易日历未核验，需核对交易日')}
+        for model in models.values():
+            model['data_state'] = state
+        result['quality'].append(verify_market_history(p, label=market))
+        sha = hashlib.sha256(p.to_csv().encode()).hexdigest()
+        result['frozen_signals'].append(frozen_signal_record(market, cutoff, str(p.index[-1].date()),
+            models['baseline']['target'], {'source': source, 'dataset': 'separate_online_history',
+                'fill': 'next_week_close' if market == 'CN' else 'next_week_open'}, source_sha=sha))
+    return result
+
+
+def monitor(symbol, bars, raw_daily, clock, now):
+    """Observe V22 confirmations only; no inferred fills, holdings or cooldowns."""
+    region = SYMBOLS[symbol][1]
+    cfg = StopConfig(market=region, core_floor=.30 if region == 'US' else .20 if symbol == '515180.SH' else 0)
+    f = normalize_bars(validate_frame(bars, intraday=True), cfg)
+    # Never expose an unfinished close to the engine.
+    f = f.loc[f.index + pd.Timedelta(minutes=30) + pd.Timedelta(seconds=5) <= now]
+    if f.empty:
+        raise ValueError('无已完成30分钟K线')
+    zone = ZONES[region]
+    day = f.index[-1].tz_convert(zone).strftime('%Y-%m-%d')
+    context = clock.complete_daily(raw_daily, region, now)
+    context = context.loc[context.index < pd.Timestamp(day)]
+    if context.empty or (pd.Timestamp(day)-context.index[-1]).days > 14:
+        raise ValueError('前一交易日日线缺失或过期')
+    line = stop_line(context.close, cfg)
+    current = f.loc[f.index.tz_convert(zone).strftime('%Y-%m-%d') == day]
+    eng = IntradayStopEngine(symbol, cfg)
+    eng.session_start(day, line['line'], line['prior_close'], line['daily_sigma'])
+    observations = []
+    for t, row in current.iterrows():
+        obs = eng.on_closed_bar(t, float(row.open), float(row.close),
+             prev_close=line['prior_close'], sigma=line['daily_sigma'], known_at=now)
+        observations.append({'d': (t+pd.Timedelta(minutes=30)).isoformat(), 'close': float(row.close),
+                             'line': line['line'], 'below_bars': obs['below_bars']})
+    age = (now - (current.index[-1] + pd.Timedelta(minutes=30))).total_seconds()
+    same_day = now.tz_convert(zone).strftime('%Y-%m-%d') == day
+    return {'symbol': symbol, 'session': day, **line, 'price_basis': 'unadjusted',
+            'observations': observations, 'below_bars': eng.s.below_count,
+            'confirmation': '本交易日一级破位曾确认，待核验真实持仓' if eng.s.pending_stage else '未触发一级确认',
+            'pending_stage': eng.s.pending_stage, 'data_state': 'current' if same_day and age <= 2400 else 'last_session',
+            'last_bar_end': observations[-1]['d'],
+            'execution': 'observation_only_no_orders_or_assumed_fills',
+            'note': '仅观察本交易日完整K线。未读取真实持仓，不推断减仓成交或冷却状态；重启按同一交易日数据确定性重放。'}

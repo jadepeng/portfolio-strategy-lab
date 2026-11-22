@@ -1,0 +1,24 @@
+{
+  "US_advisory": {
+    "n_weekly_returns": 312,
+    "block_size_weeks": 8,
+    "bootstrap_draws": 4000,
+    "annualized_log_return_diff_pct_points": 0.291,
+    "empirical_90pct_interval_pp": [
+      -0.778,
+      1.664
+    ],
+    "claim": "descriptive within repeatedly tuned history, NOT prospective validation"
+  },
+  "CN_25pct_blend": {
+    "n_weekly_returns": 312,
+    "block_size_weeks": 8,
+    "bootstrap_draws": 4000,
+    "annualized_log_return_diff_pct_points": -1.896,
+    "empirical_90pct_interval_pp": [
+      -3.366,
+      -0.545
+    ],
+    "claim": "descriptive within repeatedly tuned history, NOT prospective validation"
+  }
+}

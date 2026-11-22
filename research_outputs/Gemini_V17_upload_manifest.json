@@ -1,0 +1,16 @@
+{
+  "user_upload_file": "V17_优化代码与验证数据.zip",
+  "sha256": "b97f1c073d7b044636cd8eb05b623e200827940e5d7122f1b48e0489a9831e9b",
+  "archived_files": [
+    "v17/__init__.py",
+    "v17/us_v17.py",
+    "v17/cn_v17.py",
+    "scripts/reproduce_v17.py",
+    "research_outputs/V17_us_comparison.csv",
+    "research_outputs/V17_cn_weekly_comparison.csv",
+    "research_outputs/V17_cn_2026_daily_comparison.csv",
+    "research_outputs/V17_CN_2026_freeze_local_daily_ledger.csv",
+    "research_outputs/V17_verified_results.json"
+  ],
+  "source_files_unchanged": true
+}

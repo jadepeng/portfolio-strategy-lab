@@ -1,0 +1,12 @@
+中美股市策略实验室 V5（2026-11-21历史快照）
+
+1. Windows：解压后双击 run_windows.bat，等待启动 http://localhost:8501。
+   Ubuntu/WSL：bash run_linux.sh 或先 python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && streamlit run app.py。
+2. 左侧打开“趋势动物纪律融合 V5”。默认读取随附的2026日线，选择2016—2026周线可做长周期比较。
+3. 可开启/关闭因子、比较收益和最大回撤、导出全部交易日志CSV。
+4. 默认“红利提前试仓”关闭，因为在本次样本内无增量收益；科创50领先/成交量拥挤也未证明有效。
+5. 本包仅做研究：不含真实ETF复权分红、税费及汇率；最多适用战术账户，不会下单；仓位0%不是全部家庭资产清仓建议。
+
+复现命令：python scripts/reproduce_v5.py
+验证命令：python -m pytest -q tests  （本次实测28个通过）
+技术细节：参阅 纪律_V5.md 与 verified_fusion_v5_results.json。

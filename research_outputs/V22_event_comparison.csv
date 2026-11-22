@@ -1,0 +1,4 @@
+﻿symbol,market,first_bar,last_bar,bar_count,observed_sessions,stop_level_last_session,stop_line_pct_below_prior_close,risk_trades,baseline_event_return_pct,guard_event_return_pct,delta_pp,end_weight,source
+159915.SZ,CN,2026-06-23 09:30:00+08:00,2026-06-26 15:00:00+08:00,36,4,4.26315,-3.0,2,-0.6117,-0.6765,-0.0647,0.0,"Longbridge forward-adjusted 30m event samples; selected dates, not complete history"
+515180.SH,CN,2026-11-19 09:30:00+08:00,2026-11-20 15:00:00+08:00,18,2,1.363428,-0.697,2,-0.2237,-0.404,-0.1802,0.201,"Longbridge forward-adjusted 30m event samples; selected dates, not complete history"
+QQQ.US,US,2026-11-19 09:30:00-05:00,2026-11-20 15:30:00-05:00,26,2,625.6888,-3.0,2,-9.3894,-7.6758,1.7136,0.2949,"Longbridge forward-adjusted 30m event samples; selected dates, not complete history"

@@ -1,0 +1,20 @@
+{
+  "CN_50pct_versus_V18": {
+    "difference_annual_log_pct": -0.096,
+    "interval_90_lo": -0.867,
+    "interval_90_hi": 0.655,
+    "n_weeks": 312,
+    "block_weeks": 8,
+    "replications": 4000,
+    "is_forward_validation": false
+  },
+  "US_50pct_versus_V18": {
+    "difference_annual_log_pct": -0.217,
+    "interval_90_lo": -1.376,
+    "interval_90_hi": 1.042,
+    "n_weeks": 312,
+    "block_weeks": 8,
+    "replications": 4000,
+    "is_forward_validation": false
+  }
+}

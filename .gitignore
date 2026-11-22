@@ -1,0 +1,20 @@
+__pycache__/
+.venv/
+.pytest_cache/
+.env
+.env.*
+!.env.example
+market_data/*
+!market_data/verified_5asset_weekly_v13.csv
+!market_data/market_turnover_proxy_2024_2026_weekly.csv
+!market_data/market_turnover_derived_signals_2024_2026.csv
+!market_data/us_daily_risk_events_2026_v16.csv
+!market_data/longbridge_2016_2026_tech_dividend_prices.csv
+!market_data/longbridge_daily_2026.csv
+!market_data/longbridge_etf_fwd_2020_2026_v6.csv
+!market_data/longbridge_etf_fwd_2020_2026_v7_money.csv
+!market_data/longbridge_5asset_fwd_2020_2026_v10.csv
+
+# V22 reproducible 30-minute research WINDOW (not general intraday history)
+!market_data/v22_verified_30m_event_samples.csv
+!market_data/v22_qqq_daily_close_context.csv

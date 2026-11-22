@@ -1,0 +1,9 @@
+symbol,market,date,line,raw_trend_line,shock_line,trend_prebroken,prior_close,daily_sigma,peak,ma,method
+159915.SZ,CN,2026-06-23,4.24763,4.109469,4.24763,False,4.379,0.024620302849976648,4.379,4.0332,"max(active unbroken 20d trailing line, prior close*0.97 emergency line); stale breached trend line ignored"
+159915.SZ,CN,2026-06-24,4.099285,4.099285,4.0837,False,4.21,0.026576210295036592,4.379,4.0714999999999995,"max(active unbroken 20d trailing line, prior close*0.97 emergency line); stale breached trend line ignored"
+159915.SZ,CN,2026-06-25,4.13026,4.095228,4.13026,False,4.258,0.026657820425024403,4.379,4.1001,"max(active unbroken 20d trailing line, prior close*0.97 emergency line); stale breached trend line ignored"
+159915.SZ,CN,2026-06-26,4.26315,4.096029,4.26315,False,4.395,0.02721008225242948,4.395,4.1526,"max(active unbroken 20d trailing line, prior close*0.97 emergency line); stale breached trend line ignored"
+515180.SH,CN,2026-11-19,1.362774,1.362774,1.33763,False,1.379,0.006617570627439721,1.385,1.3719,"max(active unbroken 20d trailing line, prior close*0.97 emergency line); stale breached trend line ignored"
+515180.SH,CN,2026-11-20,1.363428,1.363428,1.33181,False,1.373,0.006752833486074791,1.385,1.3727,"max(active unbroken 20d trailing line, prior close*0.97 emergency line); stale breached trend line ignored"
+QQQ.US,US,2026-11-19,639.7247,688.146233,639.7247,True,659.51,0.02272218278742309,725.61,669.391,"max(active unbroken 20d trailing line, prior close*0.97 emergency line); stale breached trend line ignored"
+QQQ.US,US,2026-11-20,625.6888,688.355946,625.6888,True,645.04,0.023101856847303506,725.61,669.19,"max(active unbroken 20d trailing line, prior close*0.97 emergency line); stale breached trend line ignored"

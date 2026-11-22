@@ -1,0 +1,26 @@
+{
+  "CN": {
+    "market": "CN",
+    "promotion_ready": false,
+    "checks": {
+      "drawdown_improved": false,
+      "bootstrap_excludes_zero": false,
+      "double_fee_positive_cumulative": false,
+      "alternative_fill_positive_cumulative": false
+    },
+    "drawdown_improvement_pp": 0.0,
+    "status": "仅供前瞻跟踪（未通过晋级门槛）"
+  },
+  "US": {
+    "market": "US",
+    "promotion_ready": false,
+    "checks": {
+      "drawdown_improved": true,
+      "bootstrap_excludes_zero": false,
+      "double_fee_positive_cumulative": true,
+      "alternative_fill_positive_cumulative": true
+    },
+    "drawdown_improvement_pp": 2.834,
+    "status": "仅供前瞻跟踪（未通过晋级门槛）"
+  }
+}

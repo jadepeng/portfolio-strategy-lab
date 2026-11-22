@@ -1,0 +1,4 @@
+# Install on top of requirements.txt for verified exchange calendars / Longbridge.
+-r requirements.txt
+exchange-calendars>=4.11,<5
+longbridge>=5.2,<6
