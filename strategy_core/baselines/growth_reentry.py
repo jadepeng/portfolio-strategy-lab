@@ -41,8 +41,8 @@ def _ret(series, n):
     return series.pct_change(n,fill_method=None)
 
 
-def validate_growth_reentry(c: GrowthReentryConfig, v7: CashSleeveConfig) -> None:
-    if not (0 <= c.probe_weight <= c.confirmed_weight <= c.winning_weight <= 1-v7.red_core + 1e-12):
+def validate_growth_reentry(c: GrowthReentryConfig, cash_cfg: CashSleeveConfig) -> None:
+    if not (0 <= c.probe_weight <= c.confirmed_weight <= c.winning_weight <= 1-cash_cfg.red_core + 1e-12):
         raise ValueError('必须满足：0 ≤ 试仓 ≤ 确认仓 ≤ 盈利加仓 ≤ 1-红利核心仓')
     if not (-.6 < c.min_reversal_drawdown <= -.03 and .01 <= c.rebound_from_low <= .4):
         raise ValueError('反转阈值超出合理范围')

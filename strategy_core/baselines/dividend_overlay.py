@@ -3,7 +3,7 @@
 Purpose: test *incremental* value of defensive rotation, portfolio-sized risk control,
 and hysteresis (avoid churning tiny changes). No private Nick formula is asserted.
 
-Signals at the close of t; all simulations fill at close of t+1 in fusion_v5.simulate.
+Signals at the close of t; all simulations fill at close of t+1 in trend_rotation.simulate.
 Never evaluate future labels in the generation of any trading signal.
 """
 from __future__ import annotations

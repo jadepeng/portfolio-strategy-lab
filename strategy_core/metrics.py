@@ -1,4 +1,4 @@
-"""Shared week-close NAV metrics; preserve original V19 reported convention."""
+"""Shared week-close NAV metrics; preserve frozen research reporting convention."""
 import numpy as np
 
 def metrics(ledger):

@@ -125,3 +125,12 @@ def test_production_live_indicators_use_semantic_output_keys():
     assert "cn.portfolio.allocation_reason" in web
     assert "cn.portfolio.market_warning" in web
     assert not re.search(r"cn\.portfolio\.v(?:[5-9]|1[0-9]|2[0-2])", web)
+
+
+def test_frozen_signal_record_identity_stays_exact():
+    """Historical version metadata is provenance, not a versioned production API."""
+    from history.v21.analytics import frozen_signal_record as historic
+    from strategy_core.api import frozen_signal_record as current
+    args = ("US", "2026-11-20", "2026-11-16",
+            {"qqq": .3, "bil": .7}, {"fill": "next_week_open"})
+    assert current(*args, source_sha="1"*64) == historic(*args, source_sha="1"*64)

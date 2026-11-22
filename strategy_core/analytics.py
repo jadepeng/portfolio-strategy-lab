@@ -112,7 +112,7 @@ def frozen_signal_record(market: str, cutoff: str, source_week: str,
     if market not in MARKETS:raise ValueError('invalid market')
     if not source_sha or len(source_sha)!=64:raise ValueError('SHA256 required')
     if not np.isclose(sum(weights.values()),1.,atol=1e-6):raise ValueError('weights not normalized')
-    record={'version':'Analytics-RESEARCH-ONLY','market':market,'cutoff':cutoff,
+    record={'version':'V21-RESEARCH-ONLY','market':market,'cutoff':cutoff,
             'source_week_start':source_week,'target_weights':weights,
             'assumptions':assumptions,'source_sha256':source_sha,
             'record_type':'research_snapshot_not_submitted_order'}
