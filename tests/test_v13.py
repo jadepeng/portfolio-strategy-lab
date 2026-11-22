@@ -74,7 +74,7 @@ def test_2026_next_open_guard_reproducible(test_data):
 
 
 def test_daily_future_prices_cannot_change_prior_nav(test_data,monkeypatch):
-    from v13 import daily_state_v13
+    from history.v13 import daily_state_v13
     p,c,s=test_data
     t=signals_v13(p,s,RegimeConfig(hold_weeks=12))
     w=simulate_v10(p,t,c)
