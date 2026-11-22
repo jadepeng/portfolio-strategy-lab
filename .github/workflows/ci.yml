@@ -1,12 +1,38 @@
-name: V11 synthetic correctness tests
+name: Portfolio strategy regression
+
 on: [push, pull_request]
+
+permissions:
+  contents: read
+
 jobs:
-  tests:
+  python-regression:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: python -m pip install -r requirements.txt
-      - run: python -m pytest tests/test_fusion_v11.py -q
+          cache: pip
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Run all strategy, data gate, ledger, and intraday tests
+        run: python -m pytest tests -q
+
+  web-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check client JavaScript syntax
+        run: |
+          node --check web/v21.js
+          node --check web/ptms.js
+      - name: Exercise dashboard and trading console interactions
+        run: |
+          node tests/dashboard_smoke.cjs
+          node tests/ptms_smoke.cjs
