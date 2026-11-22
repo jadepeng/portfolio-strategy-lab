@@ -1,18 +1,18 @@
 """Point-in-time A-share OHLC daily replay with US overnight emergency risk.
 
 A-share Friday-close signals are filled on the NEXT A-share week's FINAL
-trading close, to match the V15 weekly baseline. US overnight emergency
+trading close, to match the USBase weekly baseline. US overnight emergency
 reductions trade at the NEXT Chinese market open after 16:00 New York close.
 No FX pooling; risky action sells only 159915.SZ (ChiNext) and buys 511880.SH.
 
-Initial 2026 holdings must be obtained from the *prior year* V15 weekly ledger;
+Initial 2026 holdings must be obtained from the *prior year* USBase weekly ledger;
 the 2026 backtest never initializes from a year-end target or uses later prices.
 """
 from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
 import pandas as pd
-from strategy_core.baselines.fusion_v10 import V10Config,TARGETS
+from strategy_core.baselines.multi_asset import MultiAssetConfig,TARGETS
 from strategy_core.overnight import DailyGateConfig,load_event_snapshot,align_events_to_cn_open
 
 _DAILY_KEYS=('tech','red','bond','gold','money')
@@ -25,7 +25,7 @@ def annual_stats(nav:pd.Series)->dict:
 
 def run_daily_replay(daily:pd.DataFrame,weekly_targets:pd.DataFrame,prior_weights:np.ndarray,
                      daily_config:DailyGateConfig=DailyGateConfig(),
-                     weekly_config:V10Config=V10Config(),events:pd.DataFrame|None=None,
+                     weekly_config:MultiAssetConfig=MultiAssetConfig(),events:pd.DataFrame|None=None,
                      prior_close:np.ndarray|None=None)->pd.DataFrame:
     daily_config.validate()
     if events is None:events=load_event_snapshot()
@@ -108,7 +108,7 @@ def run_daily_replay(daily:pd.DataFrame,weekly_targets:pd.DataFrame,prior_weight
                     if original>target[0]+1e-9:reason.append('周频新增科技仓冻结')
                 originalw=held/closevalue
                 turn=float(np.abs(originalw-target).sum())
-                # V15 weekly default: execute only once a week with same 12%
+                # USBase weekly default: execute only once a week with same 12%
                 # two-sided no-trade band; `priority_exit` remains disabled.
                 if turn>=weekly_config.execution_deadband:
                     fee=float(np.abs(originalw-target)@fees)

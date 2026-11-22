@@ -13,12 +13,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
 import pandas as pd
-from strategy_core.baselines.fusion_v10 import TARGETS, PRICES
+from strategy_core.baselines.multi_asset import TARGETS, PRICES
 
 
 @dataclass(frozen=True)
-class V20Config:
-    cn_blend: float = .25  # research-only fixed candidate; live default remains V18
+class PublicRuleConfig:
+    cn_blend: float = .25  # research-only fixed candidate; live default remains Portfolio
     us_blend: float = .25
     trend_weeks: int = 40
     momentum_weeks: int = 26
@@ -55,7 +55,7 @@ def _validate_frame(p: pd.DataFrame, columns):
         raise ValueError('invalid prices')
 
 
-def candidate_cn(prices: pd.DataFrame, c: V20Config=V20Config()) -> pd.DataFrame:
+def candidate_cn(prices: pd.DataFrame, c: PublicRuleConfig=PublicRuleConfig()) -> pd.DataFrame:
     """A capped, no-leverage, top-2 public-rule dual momentum TAA benchmark.
 
     Not ex-post tuned. Qualification: close > 40w MA and skip-4 momentum above
@@ -95,7 +95,7 @@ def candidate_cn(prices: pd.DataFrame, c: V20Config=V20Config()) -> pd.DataFrame
     return out
 
 
-def candidate_us(prices: pd.DataFrame, c:V20Config=V20Config()) ->pd.DataFrame:
+def candidate_us(prices: pd.DataFrame, c:PublicRuleConfig=PublicRuleConfig()) ->pd.DataFrame:
     """Faber-style trend + absolute momentum; keep optional QQQ long-term core."""
     c.validate();_validate_frame(prices,('QQQ','BIL'))
     q=prices.QQQ;b=prices.BIL
@@ -128,7 +128,7 @@ def blend_signals(baseline:pd.DataFrame, benchmark:pd.DataFrame,
     return out
 
 
-def advisory_gate_cn(prices:pd.DataFrame,baseline:pd.DataFrame,c:V20Config=V20Config()):
+def advisory_gate_cn(prices:pd.DataFrame,baseline:pd.DataFrame,c:PublicRuleConfig=PublicRuleConfig()):
     """Narrow *increase-only* overlay, not a trailing stop or new market timer.
 
     When an asset fails BOTH 40w trend AND 26w skip4 excess cash momentum,
@@ -168,8 +168,8 @@ def advisory_gate_cn(prices:pd.DataFrame,baseline:pd.DataFrame,c:V20Config=V20Co
     return out
 
 
-def advisory_gate_us(prices:pd.DataFrame,baseline:pd.DataFrame,c:V20Config=V20Config()):
-    """US increase-only warning. Leaves 30% core and V18 exit discipline intact."""
+def advisory_gate_us(prices:pd.DataFrame,baseline:pd.DataFrame,c:PublicRuleConfig=PublicRuleConfig()):
+    """US increase-only warning. Leaves 30% core and Portfolio exit discipline intact."""
     c.validate();_validate_frame(prices,('QQQ','BIL'))
     if not prices.index.equals(baseline.index):raise ValueError('calendar mismatch')
     m=prices.QQQ.rolling(c.trend_weeks,min_periods=c.trend_weeks).mean()

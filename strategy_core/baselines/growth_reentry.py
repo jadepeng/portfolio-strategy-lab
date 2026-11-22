@@ -1,22 +1,22 @@
-"""V8: bounded re-entry of the ChiNext ETF on top of V7 dividend/money allocation.
+"""GrowthReentry: bounded re-entry of the ChiNext ETF on top of CashSleeve dividend/money allocation.
 
 Two auditable paths:
   1. Reversal probe after a substantial decline has visibly stabilized.
   2. Confirmed relative-momentum/trend breakout, including a fast V-shaped rebound.
 
-Uses *only closes available at time t*. The shared V7 simulator fills target t
+Uses *only closes available at time t*. The shared CashSleeve simulator fills target t
 at close t+1. This research model is not a copy of a proprietary trading system.
 """
 from __future__ import annotations
 from dataclasses import dataclass, replace
 import numpy as np
 import pandas as pd
-from strategy_core.baselines.fusion_v5 import FusionConfig
-from strategy_core.baselines.fusion_v6 import V6Config
-from strategy_core.baselines.fusion_v7 import V7Config, signals_v7, simulate_v7
+from strategy_core.baselines.trend_rotation import TrendRotationConfig
+from strategy_core.baselines.dividend_overlay import DividendOverlayConfig
+from strategy_core.baselines.cash_sleeve import CashSleeveConfig, build_cash_sleeve_signals, simulate_cash_sleeve
 
 @dataclass(frozen=True)
-class V8Config:
+class GrowthReentryConfig:
     probe_weight: float = 0.12
     confirmed_weight: float = 0.38
     winning_weight: float = 0.52
@@ -41,7 +41,7 @@ def _ret(series, n):
     return series.pct_change(n,fill_method=None)
 
 
-def validate_v8(c: V8Config, v7: V7Config) -> None:
+def validate_growth_reentry(c: GrowthReentryConfig, v7: CashSleeveConfig) -> None:
     if not (0 <= c.probe_weight <= c.confirmed_weight <= c.winning_weight <= 1-v7.red_core + 1e-12):
         raise ValueError('必须满足：0 ≤ 试仓 ≤ 确认仓 ≤ 盈利加仓 ≤ 1-红利核心仓')
     if not (-.6 < c.min_reversal_drawdown <= -.03 and .01 <= c.rebound_from_low <= .4):
@@ -52,17 +52,17 @@ def validate_v8(c: V8Config, v7: V7Config) -> None:
         raise ValueError('冷却期必须是1—16个bar')
 
 
-def signals_v8(prices: pd.DataFrame, base: FusionConfig, model: V6Config,
-               cash: V7Config, c: V8Config=V8Config()) -> pd.DataFrame:
-    """Overlay reentry signals onto V7 without losing the dividend core.
+def build_growth_reentry_signals(prices: pd.DataFrame, base: TrendRotationConfig, model: DividendOverlayConfig,
+               cash: CashSleeveConfig, c: GrowthReentryConfig=GrowthReentryConfig()) -> pd.DataFrame:
+    """Overlay reentry signals onto CashSleeve without losing the dividend core.
 
-    The baseline V7 has a tradeable cash sleeve. V8 shifts cash and optionally
+    The baseline CashSleeve has a tradeable cash sleeve. GrowthReentry shifts cash and optionally
     the *tactical* part of dividends (never the core) to technology after
-    additional right-side confirmation. It can take exposure before V7's
+    additional right-side confirmation. It can take exposure before CashSleeve's
     original trend state machine but only with a small conditional probe.
     """
-    validate_v8(c,cash)
-    f=signals_v7(prices,base,model,cash).copy()
+    validate_growth_reentry(c,cash)
+    f=build_cash_sleeve_signals(prices,base,model,cash).copy()
     p=prices.tech.astype(float)
     red=prices.red.astype(float)
     m4=_ma(p,4);m6=_ma(p,6);m10=_ma(p,10);m30=_ma(p,30)
@@ -93,7 +93,7 @@ def signals_v8(prices: pd.DataFrame, base: FusionConfig, model: V6Config,
         t=float(f.target_tech.iloc[i]);r=float(f.target_red.iloc[i]);px=float(p.iloc[i])
         why=[];path='off';shift=0.
         if i < max(31,base.long_ma):
-            targets.append((t,r,1-t-r,'原V7预热', 'off', 0.,False,False))
+            targets.append((t,r,1-t-r,'原CashSleeve预热', 'off', 0.,False,False))
             continue
         crash=bool(_ret(p,1).iloc[i] <= base.tech_exit_shock)
         fast_broken=bool((p.iloc[i]<m4.iloc[i]) and (p.iloc[i-1]<m4.iloc[i-1]))
@@ -121,7 +121,7 @@ def signals_v8(prices: pd.DataFrame, base: FusionConfig, model: V6Config,
             if (not (eligible_confirm or eligible_v) and mode=='probe') and weeks_live>=4 and p.iloc[i]<m4.iloc[i]:
                 why.append('试仓超时且跌破4周线');mode='off';cool=c.cooldown_bars;entry=0.;peak=0.;weeks_live=0
             elif mode=='confirm' and px < m10.iloc[i] and ret4.iloc[i]<0 and (not eligible_confirm):
-                # May retain original V7 exposure if the V7 state machine is still live.
+                # May retain original CashSleeve exposure if the CashSleeve state machine is still live.
                 why.append('确认趋势弱化，取消增量');mode='off';cool=c.cooldown_bars;entry=0.;peak=0.;weeks_live=0
         if mode=='probe':want=c.probe_weight;path='反转试仓'
         elif mode=='confirm':
@@ -140,10 +140,10 @@ def signals_v8(prices: pd.DataFrame, base: FusionConfig, model: V6Config,
             shift=max(0,new_t-t)
             t=new_t;r=new_r
             why.append('由货币ETF或红利战术仓转入科技')
-        if not why:why.append('保留V7目标')
+        if not why:why.append('保留CashSleeve目标')
         targets.append((t,r,max(0,1-t-r),'；'.join(why),path,shift,eligible_probe,eligible_confirm or eligible_v))
         if cool>0:cool-=1
-    f[['target_tech','target_red','target_cash','v8_reason','v8_reentry_state','v8_increment','v8_probe_signal','v8_confirm_signal']]=pd.DataFrame(targets,index=f.index)
+    f[['target_tech','target_red','target_cash','reentry_reason','reentry_state','reentry_increment','reentry_probe_signal','reentry_confirm_signal']]=pd.DataFrame(targets,index=f.index)
     w=f[['target_tech','target_red','target_cash']]
     if not np.allclose(w.sum(axis=1),1) or (w < -1e-9).any().any() or (w>1+1e-9).any().any():
         raise AssertionError('仓位约束失效')
@@ -152,7 +152,7 @@ def signals_v8(prices: pd.DataFrame, base: FusionConfig, model: V6Config,
     return f
 
 
-def simulate_v8(prices: pd.DataFrame, base: FusionConfig, model: V6Config,
-                cash: V7Config,c:V8Config=V8Config()) -> pd.DataFrame:
-    signals=signals_v8(prices,base,model,cash,c)
-    return simulate_v7(prices,base,model,cash,signals)
+def simulate_growth_reentry(prices: pd.DataFrame, base: TrendRotationConfig, model: DividendOverlayConfig,
+                cash: CashSleeveConfig,c:GrowthReentryConfig=GrowthReentryConfig()) -> pd.DataFrame:
+    signals=build_growth_reentry_signals(prices,base,model,cash,c)
+    return simulate_cash_sleeve(prices,base,model,cash,signals)

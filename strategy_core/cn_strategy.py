@@ -1,4 +1,4 @@
-"""V17 优化模块：A股五资产周频核心与日频隔夜风控执行。
+"""Trend 优化模块：A股五资产周频核心与日频隔夜风控执行。
 
 核心改进（均在 2020-2026 完整6年周期验证，非针对单一2026调参）：
 1. 解锁防守资产预算：国债上限 30%->40%、黄金上限 15%->25%，启用反波动率分配（inverse_vol），
@@ -13,11 +13,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
 import pandas as pd
-from strategy_core.baselines.fusion_v6 import v6_base, V6Config
-from strategy_core.baselines.fusion_v7 import V7Config
-from strategy_core.baselines.fusion_v10 import V10Config, simulate_v10, TARGETS, PRICES
-from strategy_core.baselines.fusion_v11 import V11Config, signals_v11
-from strategy_core.regime import RegimeConfig, signals_v13
+from strategy_core.baselines.dividend_overlay import dividend_weekly_base, DividendOverlayConfig
+from strategy_core.baselines.cash_sleeve import CashSleeveConfig
+from strategy_core.baselines.multi_asset import MultiAssetConfig, simulate_multi_asset, TARGETS, PRICES
+from strategy_core.baselines.ensemble_guard import EnsembleRiskConfig, build_ensemble_signals
+from strategy_core.regime import RegimeConfig, build_regime_signals
 from strategy_core.animal_state import AnimalConfig
 from strategy_core.crowding import build_factors, classify, state_overlay, OverlayStateConfig
 from strategy_core.cross_market import us_to_cn_overlay, CrossConfig
@@ -26,7 +26,7 @@ from strategy_core.daily_replay import run_daily_replay
 
 
 @dataclass(frozen=True)
-class CNV17Config:
+class ChinaTrendConfig:
     bond_cap: float = 0.40
     gold_cap: float = 0.25
     tech_max: float = 0.55
@@ -37,8 +37,8 @@ class CNV17Config:
     freeze_weeks: int = 3
     portfolio_vol_brake: bool = True
 
-    def to_v10_config(self) -> V10Config:
-        return V10Config(
+    def to_allocation_config(self) -> MultiAssetConfig:
+        return MultiAssetConfig(
             bond_cap=self.bond_cap,
             gold_cap=self.gold_cap,
             allocation=self.allocation,
@@ -55,41 +55,41 @@ class CNV17Config:
         )
 
 
-def build_cn_v17_weekly(
+def build_china_trend_weekly(
     prices: pd.DataFrame,
     market: pd.DataFrame,
     us_prices: pd.DataFrame,
-    cfg: CNV17Config = CNV17Config(),
-) -> tuple[V10Config, pd.DataFrame, pd.DataFrame]:
-    v10_cfg = cfg.to_v10_config()
+    cfg: ChinaTrendConfig = ChinaTrendConfig(),
+) -> tuple[MultiAssetConfig, pd.DataFrame, pd.DataFrame]:
+    allocation_cfg = cfg.to_allocation_config()
     animal_cfg = cfg.to_animal_config()
-    base = signals_v11(
+    base = build_ensemble_signals(
         prices,
-        v6_base("week"),
-        V6Config(),
-        V7Config(red_core=0.30, cash_mode="money_price", money_etf_side_cost=0.0001),
-        v10_cfg,
-        V11Config(risk_guard=False),
+        dividend_weekly_base("week"),
+        DividendOverlayConfig(),
+        CashSleeveConfig(red_core=0.30, cash_mode="money_price", money_etf_side_cost=0.0001),
+        allocation_cfg,
+        EnsembleRiskConfig(risk_guard=False),
     )
-    trend = signals_v13(prices, base, RegimeConfig(hold_weeks=cfg.hold_weeks, animal=animal_cfg))
-    v14_factors = classify(build_factors(prices, market))
-    cn = state_overlay(prices, trend, v14_factors, OverlayStateConfig(freeze_weeks=cfg.freeze_weeks))
+    trend = build_regime_signals(prices, base, RegimeConfig(hold_weeks=cfg.hold_weeks, animal=animal_cfg))
+    market_factors = classify(build_factors(prices, market))
+    cn = state_overlay(prices, trend, market_factors, OverlayStateConfig(freeze_weeks=cfg.freeze_weeks))
     cn_us = us_to_cn_overlay(prices, cn, us_prices, CrossConfig())
-    hist = simulate_v10(prices, cn_us, v10_cfg)
-    return v10_cfg, cn_us, hist
+    hist = simulate_multi_asset(prices, cn_us, allocation_cfg)
+    return allocation_cfg, cn_us, hist
 
 
-def run_cn_daily_replay_v17(
+def replay_china_trend_daily(
     daily: pd.DataFrame,
     weekly_targets: pd.DataFrame,
     prior_weights: np.ndarray,
-    weekly_config: V10Config,
+    weekly_config: MultiAssetConfig,
     events: pd.DataFrame,
     prior_close: np.ndarray,
     daily_config: DailyGateConfig = DailyGateConfig(mode="freeze", require_local_weakness=True),
     exec_timing: str = "next_friday_close",
 ) -> pd.DataFrame:
-    """支持 next_friday_close（严格V16同口径）与 next_monday_open（消除5日滞后）双口径，并支持 priority_exit。"""
+    """支持 next_friday_close（严格Overnight同口径）与 next_monday_open（消除5日滞后）双口径，并支持 priority_exit。"""
     if exec_timing not in ("next_friday_close", "next_monday_open"):
         raise ValueError("exec_timing must be next_friday_close or next_monday_open")
     if exec_timing == "next_friday_close" and not weekly_config.priority_exit:

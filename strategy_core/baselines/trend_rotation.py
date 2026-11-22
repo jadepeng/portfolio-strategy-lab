@@ -1,4 +1,4 @@
-"""V5 纪律融合：公开趋势思想的透明代理 + 红利科技相对动量 + 日频风控。
+"""TrendRotation 纪律融合：公开趋势思想的透明代理 + 红利科技相对动量 + 日频风控。
 
 Not the proprietary 趋势动物 Pro model and not Nick's actual trades.
 Causal rules: signal at bar t computed using observations <= t; fill at close t+1;
@@ -14,7 +14,7 @@ import pandas as pd
 STAGES = ['冻', '寒', '凉', '平', '温', '热', '沸']
 
 @dataclass(frozen=True)
-class FusionConfig:
+class TrendRotationConfig:
     frequency: str = 'day'  # day/week
     fast: int = 20
     slow: int = 60
@@ -50,14 +50,14 @@ class FusionConfig:
 
 
 def weekly_config():
-    return FusionConfig(frequency='week', fast=6, slow=26, short_ma=6, long_ma=30,
+    return TrendRotationConfig(frequency='week', fast=6, slow=26, short_ma=6, long_ma=30,
         vol_window=12, confirm_days=2, rotate_every=4, relative_buffer=.06,
         tech_exit_shock=-.085, red_exit_shock=-.075, cooldown=2,
         tech_trail=.15, red_trail=.13, target_tech_vol=.29, target_red_vol=.18,
         use_leader_proxy=False, use_crowding_proxy=False)
 
 
-def validate_input(prices: pd.DataFrame, c: FusionConfig):
+def validate_input(prices: pd.DataFrame, c: TrendRotationConfig):
     req={'tech','red'}
     if not req.issubset(prices.columns): raise ValueError('必须包含 tech、red 收盘价')
     if c.frequency not in ('day','week'): raise ValueError('frequency 只能是 day/week')
@@ -77,7 +77,7 @@ def validate_input(prices: pd.DataFrame, c: FusionConfig):
         raise ValueError('成本或周期参数无效')
 
 
-def factor_table(prices: pd.DataFrame, c: FusionConfig):
+def factor_table(prices: pd.DataFrame, c: TrendRotationConfig):
     validate_input(prices,c)
     f=prices.copy().astype(float)
     periods=252 if c.frequency=='day' else 52
@@ -121,7 +121,7 @@ def factor_table(prices: pd.DataFrame, c: FusionConfig):
     return f
 
 
-def create_signals(prices: pd.DataFrame,c: FusionConfig)->pd.DataFrame:
+def create_signals(prices: pd.DataFrame,c: TrendRotationConfig)->pd.DataFrame:
     f=factor_table(prices,c)
     warm=max(c.slow,c.long_ma,c.vol_window,60 if c.frequency=='day' else 30)
     state={name:{'live':False,'entry':None,'peak':None,'cool':0,'size':0.,'last_exit':None} for name in ['tech','red']}
@@ -205,7 +205,7 @@ def create_signals(prices: pd.DataFrame,c: FusionConfig)->pd.DataFrame:
     return f
 
 
-def simulate(prices:pd.DataFrame,signals:pd.DataFrame,c:FusionConfig,mode='strategy'):
+def simulate(prices:pd.DataFrame,signals:pd.DataFrame,c:TrendRotationConfig,mode='strategy'):
     """Trade at t+1 close using t signal, so t->t+1 P&L uses holdings filled <=t."""
     validate_input(prices,c)
     f=signals.copy()
@@ -257,13 +257,13 @@ def metrics(df:pd.DataFrame,start=None,end=None):
             '平均现金仓位%':round(q.held_cash.mean()*100,1)}
 
 
-def compare(prices:pd.DataFrame,c:FusionConfig):
+def compare(prices:pd.DataFrame,c:TrendRotationConfig):
     f=create_signals(prices,c)
     baseline={
       '科技买入持有':simulate(prices,f,c,'tech'),
       '红利买入持有':simulate(prices,f,c,'red'),
       '50/50四周再平衡':simulate(prices,f,c,'half'),
-      'V5完整版':simulate(prices,f,c,'strategy'),
+      'TrendRotation完整版':simulate(prices,f,c,'strategy'),
       '去掉领先代理':simulate(prices,create_signals(prices,replace(c,use_leader_proxy=False)),c),
       '去掉拥挤代理':simulate(prices,create_signals(prices,replace(c,use_crowding_proxy=False)),c),
       '去掉急跌与移动止损':simulate(prices,create_signals(prices,replace(c,use_shock=False,use_trailing=False)),c),

@@ -1,4 +1,4 @@
-"""V6: deterministic, inspectable overlay on V5's trend state engine.
+"""DividendOverlay: deterministic, inspectable overlay on TrendRotation's trend state engine.
 
 Purpose: test *incremental* value of defensive rotation, portfolio-sized risk control,
 and hysteresis (avoid churning tiny changes). No private Nick formula is asserted.
@@ -10,10 +10,10 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 import numpy as np
 import pandas as pd
-from strategy_core.baselines.fusion_v5 import FusionConfig, create_signals, simulate, validate_input, metrics
+from strategy_core.baselines.trend_rotation import TrendRotationConfig, create_signals, simulate, validate_input, metrics
 
 @dataclass(frozen=True)
-class V6Config:
+class DividendOverlayConfig:
     # Cross-asset defensive rotation; each item can be independently disabled.
     enable_defensive_rotation: bool = False
     red_core: float = 0.20    # persistent dividend sleeve of strategy capital
@@ -37,15 +37,15 @@ class V6Config:
     tech_speed_cap: float = 0.25
 
 
-def config_checks(c: V6Config):
+def config_checks(c: DividendOverlayConfig):
     if not 0 <= c.red_floor <= 1 or not 0<=c.red_core<=.5: raise ValueError('red_floor/red_core 不在允许范围')
     if not 0 <= c.red_confirm <= 20 or not 1 <= c.add_confirm <= 20: raise ValueError('确认期无效')
     if not 0 <= c.min_change <= 1 or not 0 <= c.round_weight <= .2: raise ValueError('平滑参数无效')
     if not 0 <= c.tech_cap_at_high_vol <= 1: raise ValueError('科技上限无效')
 
 
-def signal_v6(prices: pd.DataFrame, base: FusionConfig, config: V6Config) -> pd.DataFrame:
-    """One-way-causal overlay; V5 model unchanged for an apples-to-apples ablation."""
+def build_dividend_signals(prices: pd.DataFrame, base: TrendRotationConfig, config: DividendOverlayConfig) -> pd.DataFrame:
+    """One-way-causal overlay; TrendRotation model unchanged for an apples-to-apples ablation."""
     validate_input(prices,base);config_checks(config)
     f=create_signals(prices,base).copy()
     warm=max(base.slow,base.long_ma,base.vol_window,60 if base.frequency=='day' else 30)
@@ -103,7 +103,7 @@ def signal_v6(prices: pd.DataFrame, base: FusionConfig, config: V6Config) -> pd.
             turnover=abs(desired[0]-last[0])+abs(desired[1]-last[1])
             if turnover < config.min_change:
                 desired=last[:2].copy()
-            # Never prevent an explicit V5 hard sell via smoothing.
+            # Never prevent an explicit TrendRotation hard sell via smoothing.
             for j in range(2):
                 if raw[j]<.001 and last[j]>.001 and desired[j]>raw[j]:
                     desired[j]=raw[j];marks.append('基础趋势硬退出')
@@ -112,35 +112,35 @@ def signal_v6(prices: pd.DataFrame, base: FusionConfig, config: V6Config) -> pd.
         last=np.array([desired[0],desired[1],1-desired.sum()])
         core=config.red_core
         hist.append(((1-core)*last[0],core+(1-core)*last[1],(1-core)*last[2],
-                     '红利常驻核心 + '+('；'.join(marks) or 'V5趋势纪律'),red_ok))
-    f[['target_tech','target_red','target_cash','v6_reason','v6_red_eligible']]=pd.DataFrame(hist,index=f.index)
+                     '红利常驻核心 + '+('；'.join(marks) or 'TrendRotation趋势纪律'),red_ok))
+    f[['target_tech','target_red','target_cash','dividend_reason','dividend_eligible']]=pd.DataFrame(hist,index=f.index)
     assert np.allclose(f[['target_tech','target_red','target_cash']].sum(axis=1),1.)
     return f
 
 
-def v6_base(frequency:str='week'):
-    """Smaller pilot and turnover deadband; no changes to V5 hard exits."""
-    from strategy_core.baselines.fusion_v5 import weekly_config
-    return replace(weekly_config() if frequency=='week' else FusionConfig(),trial=.20,min_rebalance=.12)
+def dividend_weekly_base(frequency:str='week'):
+    """Smaller pilot and turnover deadband; no changes to TrendRotation hard exits."""
+    from strategy_core.baselines.trend_rotation import weekly_config
+    return replace(weekly_config() if frequency=='week' else TrendRotationConfig(),trial=.20,min_rebalance=.12)
 
 
-def simulate_v6(prices: pd.DataFrame,base:FusionConfig,c:V6Config)->pd.DataFrame:
-    return simulate(prices,signal_v6(prices,base,c),base)
+def simulate_dividend_overlay(prices: pd.DataFrame,base:TrendRotationConfig,c:DividendOverlayConfig)->pd.DataFrame:
+    return simulate(prices,build_dividend_signals(prices,base,c),base)
 
 
-def ablate(prices: pd.DataFrame,base:FusionConfig,c:V6Config):
-    """Targeted ablation; V5 default deliberately preserved as baseline."""
-    from strategy_core.baselines.fusion_v5 import weekly_config
-    old = (weekly_config() if base.frequency=='week' else FusionConfig())
+def ablate(prices: pd.DataFrame,base:TrendRotationConfig,c:DividendOverlayConfig):
+    """Targeted ablation; TrendRotation default deliberately preserved as baseline."""
+    from strategy_core.baselines.trend_rotation import weekly_config
+    old = (weekly_config() if base.frequency=='week' else TrendRotationConfig())
     old=replace(old,cost_per_side=base.cost_per_side)
     return {
-      'V5原版':simulate(prices,create_signals(prices,old),old),
-      'V6当前设置':simulate_v6(prices,base,c),
-      'V6移除红利底仓':simulate_v6(prices,base,replace(c,red_core=0)),
-      'V6提前红利试仓':simulate_v6(prices,base,replace(c,enable_defensive_rotation=True)),
-      'V6增加加仓确认':simulate_v6(prices,base,replace(c,enable_hysteresis=True,round_weight=.05)),
-      'V6增加科技波动上限':simulate_v6(prices,base,replace(c,enable_vol_guard=True)),
-      'V6增加回撤速度闸门':simulate_v6(prices,base,replace(c,enable_drawdown_speed=True)),
+      'TrendRotation原版':simulate(prices,create_signals(prices,old),old),
+      'DividendOverlay当前设置':simulate_dividend_overlay(prices,base,c),
+      'DividendOverlay移除红利底仓':simulate_dividend_overlay(prices,base,replace(c,red_core=0)),
+      'DividendOverlay提前红利试仓':simulate_dividend_overlay(prices,base,replace(c,enable_defensive_rotation=True)),
+      'DividendOverlay增加加仓确认':simulate_dividend_overlay(prices,base,replace(c,enable_hysteresis=True,round_weight=.05)),
+      'DividendOverlay增加科技波动上限':simulate_dividend_overlay(prices,base,replace(c,enable_vol_guard=True)),
+      'DividendOverlay增加回撤速度闸门':simulate_dividend_overlay(prices,base,replace(c,enable_drawdown_speed=True)),
       '科技买入持有':simulate(prices,create_signals(prices,old),old,'tech'),
       '红利买入持有':simulate(prices,create_signals(prices,old),old,'red'),
     }

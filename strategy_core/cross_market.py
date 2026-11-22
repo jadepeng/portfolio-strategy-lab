@@ -2,7 +2,7 @@
 
 U.S. *Friday* close occurs after the Chinese *Friday* market close.
 Accordingly we strictly shift US weekly indicators by one completed week
-before using them for a Chinese Friday-close signal. A-share original V14
+before using them for a Chinese Friday-close signal. A-share original Crowding
 five-asset weights remain primary; the U.S. gate only blocks ADDITIONAL
 ChiNext purchases and routes suppressed budget into the RMB money ETF.
 Different currencies are NOT pooled or traded as one self-financing account.
@@ -10,7 +10,7 @@ Different currencies are NOT pooled or traded as one self-financing account.
 from dataclasses import dataclass
 import numpy as np
 import pandas as pd
-from strategy_core.baselines.fusion_v10 import TARGETS
+from strategy_core.baselines.multi_asset import TARGETS
 from strategy_core.us_strategy import us_factors
 
 @dataclass(frozen=True)
@@ -35,13 +35,13 @@ def observed_us_by_cn_week(cn_index:pd.DatetimeIndex,us_prices:pd.DataFrame)->pd
     return prev
 
 
-def us_to_cn_overlay(cn_prices:pd.DataFrame,cn_v14:pd.DataFrame,us_prices:pd.DataFrame,c:CrossConfig=CrossConfig())->pd.DataFrame:
-    if not cn_prices.index.equals(cn_v14.index):raise ValueError('CN strategy price/signal mismatch')
-    if not set(TARGETS).issubset(cn_v14.columns):raise ValueError('missing 5 CN targets')
+def us_to_cn_overlay(cn_prices:pd.DataFrame,cn_signals:pd.DataFrame,us_prices:pd.DataFrame,c:CrossConfig=CrossConfig())->pd.DataFrame:
+    if not cn_prices.index.equals(cn_signals.index):raise ValueError('CN strategy price/signal mismatch')
+    if not set(TARGETS).issubset(cn_signals.columns):raise ValueError('missing 5 CN targets')
     if not (0<=c.shock_new_entry_cap<=c.bear_new_entry_cap<=1 and 0<=c.warning_new_entry_cap<=1):
         raise ValueError('invalid spillover caps')
     seen=observed_us_by_cn_week(cn_prices.index,us_prices)
-    out=cn_v14.copy()
+    out=cn_signals.copy()
     w=out[list(TARGETS)].to_numpy(float).copy()
     origin=w.copy();why=[]
     last_tech=0.
@@ -50,9 +50,9 @@ def us_to_cn_overlay(cn_prices:pd.DataFrame,cn_v14:pd.DataFrame,us_prices:pd.Dat
         risk=bool(obs.us_bear) if pd.notna(obs.us_bear) else False
         shock=bool(obs.us_shock) if pd.notna(obs.us_shock) else False
         warn=bool(obs.us_warning) if pd.notna(obs.us_warning) else False
-        if c.require_cn_local_weakness and 'v14_market_regime' in out:
+        if c.require_cn_local_weakness and 'market_regime' in out:
             # A bullish China market can justify retaining its independent strength.
-            if str(out.iloc[i]['v14_market_regime'])=='放量牛市':risk=shock=warn=False
+            if str(out.iloc[i]['market_regime'])=='放量牛市':risk=shock=warn=False
         # Do not reduce existing target from the prior CN week merely because the US warning changed.
         target=float(w[i,0]);cap=None
         if c.enabled and pd.notna(obs.us_source_week):

@@ -1,4 +1,4 @@
-"""V18: audit-first integration of V17 asset risk budget and US trend ensembles.
+"""Portfolio: audit-first integration of Trend asset risk budget and US trend ensembles.
 
 CN and US strategies are *independent* accounts; U.S. information only supplies
 risk control to ChiNext tactical entry through the pre-existing causal gate.
@@ -10,13 +10,13 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 import numpy as np
 import pandas as pd
-from strategy_core.us_trend import USV17Config, us_signals_v17, simulate_us_v17
-from strategy_core.cn_strategy import CNV17Config, build_cn_v17_weekly, run_cn_daily_replay_v17
+from strategy_core.us_trend import USTrendConfig, build_us_trend_signals, simulate_us_trend
+from strategy_core.cn_strategy import ChinaTrendConfig, build_china_trend_weekly, replay_china_trend_daily
 from strategy_core.us_strategy import USConfig, simulate_us
 
 
 @dataclass(frozen=True)
-class V18CNConfig:
+class ChinaPortfolioConfig:
     """Balanced candidate, not hindsight-optimized or proven out of sample."""
     bond_cap: float = 0.35
     gold_cap: float = 0.20
@@ -26,7 +26,7 @@ class V18CNConfig:
     execution_deadband: float = 0.15
     portfolio_vol_brake: bool = True
 
-    def to_v17(self) -> CNV17Config:
+    def to_trend_config(self) -> ChinaTrendConfig:
         if not (0 <= self.bond_cap <= .5 and 0 <= self.gold_cap <= .3):
             raise ValueError('bond/gold cap out of range')
         if not (.05 <= self.tech_max <= 1.0):
@@ -35,22 +35,22 @@ class V18CNConfig:
             raise ValueError('invalid turnover threshold')
         if self.allocation not in ('inverse_vol','capped'):
             raise ValueError('invalid allocation')
-        return CNV17Config(bond_cap=self.bond_cap,gold_cap=self.gold_cap,
+        return ChinaTrendConfig(bond_cap=self.bond_cap,gold_cap=self.gold_cap,
             tech_max=self.tech_max,allocation=self.allocation,
             priority_exit=self.priority_exit,
             execution_deadband=self.execution_deadband,
             portfolio_vol_brake=self.portfolio_vol_brake)
 
 
-def build_cn_v18_weekly(prices: pd.DataFrame, market: pd.DataFrame,
+def build_china_portfolio_weekly(prices: pd.DataFrame, market: pd.DataFrame,
                        us_prices: pd.DataFrame,
-                       cfg: V18CNConfig=V18CNConfig()):
-    """Return V10Config, CN signals and weekly simulation; V17 code is reused."""
-    return build_cn_v17_weekly(prices,market,us_prices,cfg.to_v17())
+                       cfg: ChinaPortfolioConfig=ChinaPortfolioConfig()):
+    """Return MultiAssetConfig, CN signals and weekly simulation; Trend code is reused."""
+    return build_china_trend_weekly(prices,market,us_prices,cfg.to_trend_config())
 
 
 @dataclass(frozen=True)
-class V18USConfig:
+class USPortfolioConfig:
     qqq_core: float = 0.30
     ma_windows: tuple[int, ...] = (10,20,30)
     hysteresis: float = .005
@@ -64,7 +64,7 @@ class V18USConfig:
     qqq_side_fee: float = .001
     bil_side_fee: float = .0002
 
-    def to_v17(self) -> USV17Config:
+    def to_trend_config(self) -> USTrendConfig:
         if not isinstance(self.ma_windows, tuple) or len(self.ma_windows) < 2 or len(set(self.ma_windows)) != len(self.ma_windows):
             raise ValueError('Need at least two distinct MA windows')
         if not (8 <= self.vol_window <= 52):
@@ -75,7 +75,7 @@ class V18USConfig:
             raise ValueError('invalid fees')
         if self.fill_mode not in ('next_week_open','next_week_close'):
             raise ValueError('invalid fill mode')
-        c=USV17Config(qqq_core=self.qqq_core, ma_windows=self.ma_windows,
+        c=USTrendConfig(qqq_core=self.qqq_core, ma_windows=self.ma_windows,
             hysteresis=self.hysteresis,vol_window=self.vol_window,vol_cap=self.vol_cap,
             min_vol_scale=self.min_vol_scale,rebalance_threshold=self.rebalance_threshold,
             qqq_side_fee=self.qqq_side_fee,bil_side_fee=self.bil_side_fee,
@@ -84,13 +84,13 @@ class V18USConfig:
         return c
 
 
-def build_us_v18(p: pd.DataFrame, cfg: V18USConfig=V18USConfig(),
+def build_us_portfolio(p: pd.DataFrame, cfg: USPortfolioConfig=USPortfolioConfig(),
                  opens: pd.DataFrame|None=None):
-    """Gemini V17 trend + optional exit-first execution, no leverage."""
-    conf=cfg.to_v17()
-    sig=us_signals_v17(p,conf)
+    """Gemini Trend trend + optional exit-first execution, no leverage."""
+    conf=cfg.to_trend_config()
+    sig=build_us_trend_signals(p,conf)
     if not cfg.priority_exit:
-        return sig,simulate_us_v17(p,conf,opens)[1]
+        return sig,simulate_us_trend(p,conf,opens)[1]
     if cfg.fill_mode=='next_week_open':
         if opens is None:
             from strategy_core.us_snapshot import load_us_open

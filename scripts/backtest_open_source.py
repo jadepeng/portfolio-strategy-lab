@@ -8,14 +8,14 @@ import pandas as pd
 from live.backtest import run_bt_reference
 from strategy_core.market_snapshot import load_weekly
 from strategy_core.us_snapshot import load_us_prices, load_us_open
-from strategy_core.portfolio import build_cn_v18_weekly, build_us_v18
+from strategy_core.portfolio import build_china_portfolio_weekly, build_us_portfolio
 
 
 def main():
     cn = pd.read_csv(ROOT/'market_data'/'verified_5asset_weekly_v13.csv', parse_dates=['week_start']).set_index('week_start')
     us, op = load_us_prices(), load_us_open()
-    _, csig, _ = build_cn_v18_weekly(cn, load_weekly(), us)
-    usig, _ = build_us_v18(us, opens=op)
+    _, csig, _ = build_china_portfolio_weekly(cn, load_weekly(), us)
+    usig, _ = build_us_portfolio(us, opens=op)
     results = {m: run_bt_reference(p, s, m) for m, p, s in [('CN', cn, csig), ('US', us, usig)]}
     if not all(r['state'] == 'available' for r in results.values()):
         print('bt is not installed. Run: python -m pip install -r requirements-open-source.txt')
