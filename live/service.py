@@ -289,7 +289,7 @@ class LiveService:
                 'bucket': meta['bucket'],
                 'session_date': p_st.get('session_date') or today_str,
                 'status': 'research_fallback',
-                'status_note': '离线参考线 · 连接实时行情后自动推进 30 分钟 K 线',
+                'status_note': '离线参考防线（联网后将按 30 分钟 K 线自动跟踪）',
                 'active_line': active_line,
                 'candidate_line': clean_float(cand.get('line')),
                 'raw_trend_line': clean_float(cand.get('raw_trend_line')),

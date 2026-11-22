@@ -130,7 +130,13 @@ class PublicProvider:
         ticker = SYMBOLS[symbol][0]
         kwargs = {'period': '7y' if interval == '1d' else '5d', 'interval': interval,
                   'auto_adjust': adjusted, 'actions': False, 'prepost': False,
-                  'timeout': 12, 'raise_errors': True}
+                  'timeout': 12}
+        debug_cfg = getattr(getattr(yf, 'config', None), 'debug', None)
+        if debug_cfg is not None and hasattr(debug_cfg, 'hide_exceptions'):
+            if debug_cfg.hide_exceptions:
+                debug_cfg.hide_exceptions = False
+        else:
+            kwargs['raise_errors'] = True
         # start/end avoids provider-specific support for a "7y" period.
         if interval == '1d':
             kwargs.pop('period')

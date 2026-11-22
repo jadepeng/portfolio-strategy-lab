@@ -392,7 +392,7 @@ def sync_account_intraday_stops(
             'bucket': meta['bucket'],
             'session_date': session_day,
             'status': 'bars_unavailable' if bars_error else 'ready',
-            'status_note': bars_error or ('监控持仓中' if has_tactical else '当前无超出底仓的战术仓位'),
+            'status_note': bars_error or ('正在监控战术仓位' if has_tactical else '仅持长期底仓，暂无超出底仓的战术仓位'),
             'active_line': active_line,
             'candidate_line': clean_float(line_info['line'], ndigits=4),
             'raw_trend_line': clean_float(line_info['raw_trend_line'], ndigits=4),
@@ -769,27 +769,27 @@ def build_rebalance_plan(
         verdict = 'ACTION_INTRADAY_STOP'
         verdict_label = '盘中破位防守优先'
         verdict_reason = (
-            f'存在 {len(pending_intraday)} 笔待执行盘中减仓票据，优先执行日内防守，暂停同期周频风险加仓'
+            f'有 {len(pending_intraday)} 笔盘中防守减仓单待确认，优先降低风险敞口，暂缓本周风险加仓'
         )
     elif not portfolio['initialized'] or portfolio['total_equity'] <= 1e-6:
         verdict = 'NEEDS_INIT'
-        verdict_label = '等待账户初始化建账'
-        verdict_reason = '请先录入当前真实持仓与可用现金，系统再生成可执行的股数/手数调仓单'
+        verdict_label = '待初始化账户持仓'
+        verdict_reason = '先录入当前账户现金与已有持仓，系统即可生成精确到股数的调仓建议'
     elif priority_exit and orders:
         verdict = 'ACTION_PRIORITY_EXIT'
-        verdict_label = '风控优先减仓（绕过换手死区）'
-        verdict_reason = '周频信号要求权益风险显著收缩或创业板清零，按优先退出纪律立即执行'
+        verdict_label = '风控优先减仓'
+        verdict_reason = '周频信号触发权益显著收缩或创业板清仓，按风控优先纪律绕过调仓阈值立即减仓'
     elif turnover >= deadband - 1e-9 and orders:
         verdict = 'ACTION_REBALANCE'
-        verdict_label = '周频再平衡触发'
-        verdict_reason = f'实盘相对有效目标双边偏离 {turnover*100:.1f}% ≥ 死区 {deadband*100:.0f}%，建议按单调仓'
+        verdict_label = '建议按周频调仓'
+        verdict_reason = f'当前仓位与目标仓位双边偏离 {turnover*100:.1f}%，已达到 {deadband*100:.0f}% 调仓阈值'
     else:
         verdict = 'HOLD_WITHIN_DEADBAND'
-        verdict_label = '死区内观望持有'
+        verdict_label = '继续持有，暂无需调仓'
         verdict_reason = (
-            f'当前偏离 {turnover*100:.1f}% 未达换手死区 {deadband*100:.0f}%'
+            f'当前仓位偏离 {turnover*100:.1f}%，未达到 {deadband*100:.0f}% 的调仓阈值，继续持有以减少交易磨损'
             if turnover < deadband - 1e-9
-            else '当前手数已贴近目标仓位，零头不足 1 手，无需调仓'
+            else '当前持仓已贴近目标，差额不足最小交易单位，无需操作'
         )
 
     should_execute = verdict in ('ACTION_INTRADAY_STOP', 'ACTION_PRIORITY_EXIT', 'ACTION_REBALANCE')

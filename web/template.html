@@ -11,14 +11,14 @@
   <div class="app-shell" id="app">
     <aside class="sidebar" aria-label="主导航">
       <div class="brand"><div class="brand-mark"><span>Q</span></div><div class="brand-copy"><strong>QUANT<span>LAB</span></strong><small>PORTFOLIO INTELLIGENCE</small></div></div>
-      <div class="side-subtitle">TRADING OS <span class="side-dash"></span></div>
+      <div class="side-subtitle">个人交易 <span class="side-dash"></span></div>
       <nav class="nav-list" id="ptms-nav" aria-label="个人交易管理">
-        <button class="nav-item" data-view="desk"><span class="nav-icon">◈</span><span>决策与调仓台</span><span class="nav-count">T1</span></button>
+        <button class="nav-item" data-view="desk"><span class="nav-icon">◈</span><span>今日决策</span><span class="nav-count">T1</span></button>
         <button class="nav-item" data-view="portfolio"><span class="nav-icon">▤</span><span>持仓与账本</span><span class="nav-count">T2</span></button>
-        <button class="nav-item" data-view="indicators"><span class="nav-icon">◎</span><span>策略指标雷达</span><span class="nav-count">T3</span></button>
-        <button class="nav-item" data-view="review"><span class="nav-icon">✦</span><span>交易复盘中心</span><span class="nav-count">T4</span></button>
+        <button class="nav-item" data-view="indicators"><span class="nav-icon">◎</span><span>指标看板</span><span class="nav-count">T3</span></button>
+        <button class="nav-item" data-view="review"><span class="nav-icon">✦</span><span>复盘中心</span><span class="nav-count">T4</span></button>
       </nav>
-      <div class="side-subtitle" style="margin-top:16px">RESEARCH &amp; AUDIT <span class="side-dash"></span></div>
+      <div class="side-subtitle" style="margin-top:16px">策略研究 <span class="side-dash"></span></div>
       <nav class="nav-list" id="nav" aria-label="研究视图">
         <button class="nav-item active" data-view="overview"><span class="nav-icon">◫</span><span>总览驾驶舱</span><span class="nav-count">01</span></button>
         <button class="nav-item" data-view="cn"><span class="nav-icon">▥</span><span>A股策略</span><span class="nav-count">02</span></button>
@@ -40,12 +40,12 @@
         <div class="top-actions"><div class="snapshot-pill"><span class="pulse"></span><span id="connection-label" role="status">正在连接行情服务</span></div><button class="icon-button" id="export-snapshot" title="导出当前视图 JSON" aria-label="导出当前视图">⇩</button></div>
       </header>
       <main class="main">
-        <section class="hero"><div class="hero-copy"><div class="eyebrow"><span class="eyebrow-line"></span> QUANTITATIVE RESEARCH CONSOLE · V22</div>
+        <section class="hero"><div class="hero-copy"><div class="eyebrow"><span class="eyebrow-line"></span> 个人交易管理系统 · QUANTLAB V22</div>
           <h1 id="page-title">中美双市场<span>策略驾驶舱</span></h1>
           <p id="page-desc">同一份研究快照，追踪A股五资产、美股趋势仓和跨市场风险。可核验收益、仓位、信号、执行成本与模型局限。</p>
-        </div><div class="hero-right"><div class="hero-label">STRATEGY DATA CUT-OFF</div><strong id="display-cutoff">2026 / 11 / 20</strong><span id="display-basis">历史研究 · 正在检查在线数据</span></div></section>
+        </div><div class="hero-right"><div class="hero-label">策略数据基准日</div><strong id="display-cutoff">2026 / 11 / 20</strong><span id="display-basis">历史研究 · 正在检查在线数据</span></div></section>
 
-        <section class="panel live-panel" aria-label="行情与策略数据状态">
+        <section class="panel live-panel" id="live-panel" aria-label="行情与策略数据状态">
           <div class="panel-top"><div><span class="micro">LIVE MARKET & STRATEGY ENGINE</span><h3>行情与策略在线跟踪</h3></div><div class="live-controls"><label>显示数据 <select id="data-mode"><option value="live">在线跟踪</option><option value="research">冻结历史研究</option></select></label><button class="ghost-button" id="live-pause">暂停刷新</button><button class="solid-button" id="live-refresh">立即刷新</button></div></div>
           <p id="live-message" role="status">正在连接本地行情服务。历史数据截至2026-11-20。</p>
           <div id="live-market-status" class="live-market-status"></div>
@@ -55,20 +55,20 @@
           <div class="soft-foot" id="data-scope">周频模型只读取完整交易周；报价不直接改变周频目标。行情可能延迟。历史研究与在线重算使用独立数据集，收益不拼接。</div>
         </section>
 
-        <section id="view-desk" class="view" aria-label="决策与调仓台">
-          <div id="ptms-desk-root" class="ptms-shell"><div class="panel"><p class="empty">个人交易决策台需要通过本地服务访问：运行 <code>python scripts/serve_dashboard.py</code> 后打开 <code>http://127.0.0.1:8765</code>。</p></div></div>
+        <section id="view-desk" class="view" aria-label="今日决策">
+          <div id="ptms-desk-root" class="ptms-shell"><div class="panel"><p class="empty">当前为离线研究快照，请双击 <code>run_dashboard_windows.bat</code> 启动本地服务后查看今日交易决策。</p></div></div>
         </section>
 
         <section id="view-portfolio" class="view" aria-label="持仓与账本">
-          <div id="ptms-portfolio-root" class="ptms-shell"><div class="panel"><p class="empty">真实持仓与账本需要通过本地服务访问。</p></div></div>
+          <div id="ptms-portfolio-root" class="ptms-shell"><div class="panel"><p class="empty">请通过本地交易服务打开此页面，管理双市场真实持仓与资金流水。</p></div></div>
         </section>
 
-        <section id="view-indicators" class="view" aria-label="策略指标雷达">
-          <div id="ptms-indicators-root" class="ptms-shell"><div class="panel"><p class="empty">完整策略指标雷达需要通过本地服务访问。</p></div></div>
+        <section id="view-indicators" class="view" aria-label="指标看板">
+          <div id="ptms-indicators-root" class="ptms-shell"><div class="panel"><p class="empty">请通过本地交易服务打开此页面，查看双市场完整策略指标与防守线拆解。</p></div></div>
         </section>
 
-        <section id="view-review" class="view" aria-label="交易复盘中心">
-          <div id="ptms-review-root" class="ptms-shell"><div class="panel"><p class="empty">交易复盘与 TWR 归因中心需要通过本地服务访问。</p></div></div>
+        <section id="view-review" class="view" aria-label="复盘中心">
+          <div id="ptms-review-root" class="ptms-shell"><div class="panel"><p class="empty">请通过本地交易服务打开此页面，查看账户真实收益率对比与复盘日记。</p></div></div>
         </section>
 
         <section id="view-overview" class="view active" aria-label="总览驾驶舱">

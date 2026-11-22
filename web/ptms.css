@@ -1,4 +1,8 @@
 /* Personal Trading Management System (PTMS) styles */
+.live-panel[hidden] {
+  display: none;
+}
+
 .ptms-shell {
   display: grid;
   gap: 18px;

@@ -256,3 +256,31 @@ def test_served_html_has_all_live_controls_and_embedded_offline_fallback():
     assert all(x in html for x in ('id="data-mode"', 'id="live-quotes"', '/api/dashboard', 'id="bt-reference"'))
     assert '/* V21_CODE */' not in html and 'V21_DATA_JSON' not in html
     assert 'https://cdn.' not in html
+
+
+def test_public_provider_avoids_yfinance_raise_errors_deprecation(monkeypatch):
+    import warnings
+    import yfinance as yf
+    from live.market import PublicProvider
+
+    captured = {}
+
+    class DummyTicker:
+        def __init__(self, symbol):
+            captured['symbol'] = symbol
+
+        def history(self, **kwargs):
+            captured['kwargs'] = kwargs
+            return pd.DataFrame(
+                {'Open': [100.0, 101.0], 'Close': [101.0, 102.0]},
+                index=pd.DatetimeIndex(['2026-11-19', '2026-11-20']),
+            )
+
+    monkeypatch.setattr(yf, 'Ticker', DummyTicker)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        frame = PublicProvider.history('QQQ.US', interval='1d', adjusted=False)
+    assert len(frame) == 2
+    assert 'raise_errors' not in captured['kwargs']
+    assert yf.config.debug.hide_exceptions is False
+    assert not any(issubclass(w.category, DeprecationWarning) for w in caught)
