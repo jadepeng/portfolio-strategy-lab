@@ -1,7 +1,7 @@
 from dataclasses import dataclass,replace
 import pandas as pd,numpy as np
-from strategy_core.baselines.fusion_v10 import TARGETS, PRICES
-from strategy_core.baselines.fusion_v11 import risk_project,_cov
+from strategy_core.baselines.multi_asset import TARGETS, PRICES
+from strategy_core.baselines.ensemble_guard import risk_project,_cov
 
 @dataclass(frozen=True)
 class AnimalConfig:

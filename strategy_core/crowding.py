@@ -1,4 +1,4 @@
-"""V14: point-in-time broad turnover and concentration proxies.
+"""Crowding: point-in-time broad turnover and concentration proxies.
 
 The top-5%-of-stocks concentration published by CICC cannot be reconstructed
 from index aggregates. We use an explicitly named *index-basket turnover share*
@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
 import pandas as pd
-from strategy_core.baselines.fusion_v10 import TARGETS
+from strategy_core.baselines.multi_asset import TARGETS
 
 @dataclass(frozen=True)
 class CrowdConfig:
@@ -97,13 +97,13 @@ def classify(f:pd.DataFrame,c:CrowdConfig=CrowdConfig())->pd.DataFrame:
 
 
 def overlay_signals(p:pd.DataFrame,base:pd.DataFrame,factors:pd.DataFrame,c:CrowdConfig=CrowdConfig())->pd.DataFrame:
-    """Risk-only overlay on any V11/V13 strategy. Does not predict a literal top."""
+    """Risk-only overlay on any EnsembleRisk/Regime strategy. Does not predict a literal top."""
     if not p.index.equals(base.index):raise ValueError('strategy input date mismatch')
     if not set(TARGETS).issubset(base):raise ValueError('missing target columns')
     f=base.copy()
     aligned=factors.reindex(p.index)
     for name in ('market_close','market_turn_ratio','tech_turn_share','double_creation_share','market_regime','top_warning','bear_weak_volume','red_takeover','crowd_rollover','volume_exhaustion','bull_expansion'):
-        f['v14_'+name]=aligned[name]
+        f[name]=aligned[name]
     origin=f[list(TARGETS)].to_numpy(dtype=float)
     out=origin.copy()
     effect=[]
@@ -121,16 +121,16 @@ def overlay_signals(p:pd.DataFrame,base:pd.DataFrame,factors:pd.DataFrame,c:Crow
         add_to_red=min(delta*c.red_shift_fraction,max(0,.80-current[1])) if c.use_red_transition and bool(row.red_takeover) else 0.
         current[1]+=add_to_red
         current[4]+=delta-add_to_red
-        if abs(current.sum()-1)>1e-8 or min(current)<-1e-9:raise AssertionError('V14 budget violation')
+        if abs(current.sum()-1)>1e-8 or min(current)<-1e-9:raise AssertionError('Crowding budget violation')
         out[i]=current
         effect.append(f'{"熊市/急跌" if bear else "顶部量价背离"};科技减少{delta:.1%}，红利增加{add_to_red:.1%}')
     f[list(TARGETS)]=out
-    f['v14_effect']=effect
+    f['market_effect']=effect
     return f
 
 @dataclass(frozen=True)
 class OverlayStateConfig:
-    """V14-B: fear/confirmation state machine, rather than hard crowd sell."""
+    """Crowding-B: fear/confirmation state machine, rather than hard crowd sell."""
     freeze_weeks:int=3
     frozen_new_entry_cap:float=.12
     require_market_confirmation:bool=True
@@ -179,6 +179,6 @@ def state_overlay(p:pd.DataFrame,base:pd.DataFrame,factors:pd.DataFrame,c:Overla
         reasons.append('; '.join(reason) if reason else 'unmodified')
         warnings.append(warning)
     f[list(TARGETS)]=w
-    f['v14_warning']=warnings
-    f['v14_reason']=reasons
+    f['market_warning']=warnings
+    f['market_reason']=reasons
     return f

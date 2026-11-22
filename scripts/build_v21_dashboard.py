@@ -11,13 +11,13 @@ from pathlib import Path
 import sys
 import pandas as pd
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
-from strategy_core.market_snapshot import load_weekly
-from strategy_core.us_snapshot import load_us_prices,load_us_open
-from strategy_core.portfolio import build_cn_v18_weekly,build_us_v18,V18USConfig
-from strategy_core.advisory import run_advisory_cn,run_advisory_us,run_cn_v20,run_us_v20
-from strategy_core.public_rules import V20Config
-from strategy_core.analytics import (verify_market_history,describe,equity_curve,yearly,
-                           latest_weights,execution_gate,frozen_signal_record,sha256_file)
+from strategy_core.api import (
+    load_weekly, load_us_prices, load_us_open,
+    build_china_portfolio_weekly, build_us_portfolio, USPortfolioConfig,
+    run_advisory_cn, run_advisory_us, evaluate_china_rule_blend, evaluate_us_rule_blend,
+    PublicRuleConfig, verify_market_history, describe, equity_curve, yearly,
+    latest_weights, execution_gate, frozen_signal_record, sha256_file,
+)
 
 ASOF='2026-11-20'
 OUT=ROOT/'research_outputs';OUT.mkdir(exist_ok=True)
@@ -32,12 +32,12 @@ us_quality=verify_market_history(us,label='US')
 if cn.index[-1].strftime('%Y-%m-%d')!='2026-11-16':raise AssertionError('unreviewed live data')
 if us.index[-1].strftime('%Y-%m-%d')!='2026-11-16':raise AssertionError('unreviewed US live data')
 
-ccfg,cn_base_signals,cn_base=build_cn_v18_weekly(cn,market,us)
-_,cn_guard_signals,_,cn_guard=run_advisory_cn(cn,market,us,V20Config())
-cn_blend_out=run_cn_v20(cn,market,us,V20Config(cn_blend=.25))
-us_base_signals,us_base=build_us_v18(us,V18USConfig(),us_open)
-_,us_guard_signals,_,us_guard=run_advisory_us(us,us_open,V20Config())
-us_blend_out=run_us_v20(us,us_open,V20Config(us_blend=.25))
+ccfg,cn_base_signals,cn_base=build_china_portfolio_weekly(cn,market,us)
+_,cn_guard_signals,_,cn_guard=run_advisory_cn(cn,market,us,PublicRuleConfig())
+cn_blend_out=evaluate_china_rule_blend(cn,market,us,PublicRuleConfig(cn_blend=.25))
+us_base_signals,us_base=build_us_portfolio(us,USPortfolioConfig(),us_open)
+_,us_guard_signals,_,us_guard=run_advisory_us(us,us_open,PublicRuleConfig())
+us_blend_out=evaluate_us_rule_blend(us,us_open,PublicRuleConfig(us_blend=.25))
 
 cweights=('held_tech','held_red','held_bond','held_gold','held_money')
 uweights=('held_qqq','held_bil')
@@ -86,7 +86,7 @@ records=[frozen_signal_record('CN',ASOF,str(cn.index[-1].date()),strategies['CN'
            {'fill':'next_week_close','default':'V18_CN_35_20','proactive_2026_selected':False},source_sha=sha256_file(cn_file)),
          frozen_signal_record('US',ASOF,str(us.index[-1].date()),strategies['US']['baseline']['target'],
            {'fill':'next_week_open','default':'V18_US_30core','optional_filter':'V20_G_research_only'},
-           source_sha=sha256_file(ROOT/'v15'/'us_snapshot.py'))]
+           source_sha=sha256_file(ROOT/'history'/'v15'/'us_snapshot.py'))]
 (OUT/'V21_frozen_signals.json').write_text(json.dumps(records,ensure_ascii=False,indent=2),encoding='utf-8')
 (OUT/'V21_strategy_comparison.csv').write_text(pd.DataFrame(comparisons).to_csv(index=False),encoding='utf-8-sig')
 
@@ -132,11 +132,11 @@ signals={
        'cross_market':str(csig.get('us_risk_state_lagged','')),
        'description':'美股作为风险提醒；中国市场趋势决定是否真正减仓。'},
  'US':{'risk':str(usig.get('us_risk_state','')),
-       'trend_score':float(usig.get('us_v17_trend_score',0)),
+       'trend_score':float(usig.get('us_trend_score',0)),
        'qqq_close':float(us.QQQ.iloc[-1]),
        'qqq_ma30':round(float(us.QQQ.tail(30).mean()),2),
        'spy_close':float(us.SPY.iloc[-1]),
-       'vol_multiplier':round(float(usig.get('us_v17_vol_mult',1)),3),
+       'vol_multiplier':round(float(usig.get('us_vol_mult',1)),3),
        'description':'30% QQ​Q长期核心保留，70%战术资金在BIL中防守。'}}
 
 payload={'metadata':{'product':'Portfolio Strategy Lab','version':'V21','asof':ASOF,

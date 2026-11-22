@@ -1,4 +1,4 @@
-"""V16: US-market-close to China-next-open risk overlay.
+"""Overnight: US-market-close to China-next-open risk overlay.
 
 The signal is UTC/ET time stamped; NO US event can affect a Chinese opening
 before its New York 16:00 close. This is a *risk-only*, China-tech tactical

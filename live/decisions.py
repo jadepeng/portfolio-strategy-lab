@@ -20,8 +20,7 @@ from live.store import (
     normalize_trade_date,
     risk_monitored_symbols,
 )
-from strategy_core.allocation import clip_weekly_risk_additions
-from strategy_core.intraday import IntradayStopEngine, StopConfig, normalize_bars, stop_line
+from strategy_core.api import clip_weekly_risk_additions, IntradayStopEngine, StopConfig, normalize_bars, stop_line
 
 
 def add_trading_sessions(day_str: str, sessions: int, market: str, clock=None) -> str:
@@ -118,7 +117,7 @@ def sync_account_intraday_stops(
     clock,
     now: pd.Timestamp,
 ) -> dict[str, dict[str, Any]]:
-    """Advance persistent V22 stop state machines using closed 30m bars and real holdings."""
+    """Advance persistent intraday stop state machines using closed 30m bars and real holdings."""
     market = account['market']
     today_str = market_today(market, now)
     persisted_map = store.get_stop_states(account['account_id'])
@@ -367,7 +366,7 @@ def sync_account_intraday_stops(
                         'est_fee': est_fee,
                         't_plus': meta['t_plus'],
                         'warning': warning,
-                        'reason': f'V22 第{eng.s.pending_stage}档有效跌破减仓（{eng.s.pending_reason}）',
+                        'reason': f'盘中风控第{eng.s.pending_stage}档有效跌破减仓（{eng.s.pending_reason}）',
                     }
                 ],
                 't_plus_blocked': t_plus_blocked,
@@ -810,7 +809,7 @@ def build_rebalance_plan(
     *,
     data_gate: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Arbitrate weekly V18 target against persistent V22 intraday stops & cooldowns."""
+    """Arbitrate weekly portfolio target against persistent intraday stops & cooldowns."""
     market = account['market']
     cash_sym = cash_etf_symbol(market)
     cash_bucket = INSTRUMENT_META[cash_sym]['bucket']

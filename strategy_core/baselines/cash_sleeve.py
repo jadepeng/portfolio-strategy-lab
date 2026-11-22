@@ -1,4 +1,4 @@
-"""V7: V6 signals with a tradable cash sleeve and conservative dividend tilts.
+"""CashSleeve: DividendOverlay signals with a tradable cash sleeve and conservative dividend tilts.
 
 This is an *explicit* research model, NOT the proprietary 趋势动物 formula.
 At bar t use data through t; execute at bar t+1 close. Cash sleeve can be
@@ -7,18 +7,18 @@ forward-adjusted ETF market price proxy. Money-market ETFs are not risk-free.
 
 Costs differ per traded instrument: equities are charged per equity buy/sell,
 money ETF charges an optional secondary-market spread/commission per buy/sell.
-Uninvested cash has no transaction fee. This re-costs V6 baselines consistently.
+Uninvested cash has no transaction fee. This re-costs DividendOverlay baselines consistently.
 """
 from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Optional
 import numpy as np
 import pandas as pd
-from strategy_core.baselines.fusion_v5 import FusionConfig, metrics
-from strategy_core.baselines.fusion_v6 import V6Config, signal_v6, v6_base
+from strategy_core.baselines.trend_rotation import TrendRotationConfig, metrics
+from strategy_core.baselines.dividend_overlay import DividendOverlayConfig, build_dividend_signals, dividend_weekly_base
 
 @dataclass(frozen=True)
-class V7Config:
+class CashSleeveConfig:
     red_core: float = .20
     red_extra: float = .0
     red_qualify: str = 'strict'  # strict: >=30wk MA, +26w momentum, +6w momentum; medium ignores 6w
@@ -29,7 +29,7 @@ class V7Config:
     # When money_etf_side_cost is too optimistic, stress test up to .001.
 
 
-def configure_v7(base: FusionConfig, model: V6Config, p: V7Config):
+def configure_cash_sleeve(base: TrendRotationConfig, model: DividendOverlayConfig, p: CashSleeveConfig):
     if not 0 <= p.red_core <= .5 or not 0 <= p.red_extra <= .7 or p.red_core+p.red_extra> .85:
         raise ValueError('红利核心及动态加仓范围不合法')
     if p.red_qualify not in ('strict','medium','off'):
@@ -41,11 +41,11 @@ def configure_v7(base: FusionConfig, model: V6Config, p: V7Config):
     return replace(model,red_core=p.red_core)
 
 
-def signals_v7(prices:pd.DataFrame, base: FusionConfig, model: V6Config,p: V7Config) ->pd.DataFrame:
-    c=configure_v7(base, model,p)
-    df=signal_v6(prices,base,c).copy()
+def build_cash_sleeve_signals(prices:pd.DataFrame, base: TrendRotationConfig, model: DividendOverlayConfig,p: CashSleeveConfig) ->pd.DataFrame:
+    c=configure_cash_sleeve(base, model,p)
+    df=build_dividend_signals(prices,base,c).copy()
     if p.red_extra<=0 or p.red_qualify=='off':
-        df['v7_red_add']=0.
+        df['dividend_add']=0.
         return df
     win_s=6 if base.frequency=='week' else 30
     win_l=26 if base.frequency=='week' else 120
@@ -58,12 +58,12 @@ def signals_v7(prices:pd.DataFrame, base: FusionConfig, model: V6Config,p: V7Con
     inc=np.where(positive.to_numpy(dtype=bool),np.minimum(p.red_extra,cash),0.)
     df['target_red']=df.target_red.to_numpy(float)+inc
     df['target_cash']=cash-inc
-    df['v7_red_add']=inc
+    df['dividend_add']=inc
     assert np.allclose(df[['target_tech','target_red','target_cash']].sum(axis=1),1)
     return df
 
 
-def simulate_v7(prices:pd.DataFrame,base:FusionConfig, model:V6Config,p:V7Config,
+def simulate_cash_sleeve(prices:pd.DataFrame,base:TrendRotationConfig, model:DividendOverlayConfig,p:CashSleeveConfig,
                 signals:Optional[pd.DataFrame]=None,mode='strategy')->pd.DataFrame:
     """Compare cash/no-cash portfolios using identical instrument fee conventions.
 
@@ -72,7 +72,7 @@ def simulate_v7(prices:pd.DataFrame,base:FusionConfig, model:V6Config,p:V7Config
     adjusted prices and cash ETF trading cost on both sides. The adjusted-price
     proxy assumes the provider's adjustment captures distributions correctly.
     """
-    if signals is None:signals=signals_v7(prices,base,model,p)
+    if signals is None:signals=build_cash_sleeve_signals(prices,base,model,p)
     if mode=='strategy':targets=signals[['target_tech','target_red','target_cash']].to_numpy(float)
     elif mode=='tech':targets=np.tile([1.,0.,0.],(len(signals),1))
     elif mode=='red':targets=np.tile([0.,1.,0.],(len(signals),1))
@@ -80,7 +80,7 @@ def simulate_v7(prices:pd.DataFrame,base:FusionConfig, model:V6Config,p:V7Config
     else:raise ValueError('bad mode')
     if p.cash_mode=='money_price' and ('cash_511880_adj' not in prices or prices.cash_511880_adj.isna().any() or (prices.cash_511880_adj<=0).any()):
         raise ValueError('511880总收益代理价格列缺失')
-    configure_v7(base,model,p)
+    configure_cash_sleeve(base,model,p)
     if len(prices)!=len(signals):raise ValueError('signals length mismatch')
     if base.frequency=='day':bars=252
     else:bars=52
@@ -113,18 +113,18 @@ def simulate_v7(prices:pd.DataFrame,base:FusionConfig, model:V6Config,p:V7Config
 
 
 def eval_cases(prices:pd.DataFrame,fee_bps=15,cash_spread_bps=1):
-    base=replace(v6_base('week'),cost_per_side=fee_bps/10000)
-    cfg=V6Config()
+    base=replace(dividend_weekly_base('week'),cost_per_side=fee_bps/10000)
+    cfg=DividendOverlayConfig()
     runs={}
     for name,core,extra,qual,mode in [
-       ('V6空仓收益0%',.2,0.,'off','cash_zero'),
-       ('V6红利20%+511880',.2,0.,'off','money_price'),
+       ('DividendOverlay空仓收益0%',.2,0.,'off','cash_zero'),
+       ('DividendOverlay红利20%+511880',.2,0.,'off','money_price'),
        ('红利30%+511880',.3,0.,'off','money_price'),
        ('红利40%+511880',.4,0.,'off','money_price'),
        ('红利50%+511880',.5,0.,'off','money_price'),
        ('红利20%+严格动量最多加20%+511880',.2,.2,'strict','money_price'),
        ('红利20%+中期趋势最多加20%+511880',.2,.2,'medium','money_price'),
-       ('V6红利20%+假定货币利率1.0%',.2,0.,'off','assumed_yield')]:
-        p=V7Config(red_core=core,red_extra=extra,red_qualify=qual,cash_mode=mode,money_etf_side_cost=cash_spread_bps/10000)
-        runs[name]=simulate_v7(prices,base,cfg,p)
+       ('DividendOverlay红利20%+假定货币利率1.0%',.2,0.,'off','assumed_yield')]:
+        p=CashSleeveConfig(red_core=core,red_extra=extra,red_qualify=qual,cash_mode=mode,money_etf_side_cost=cash_spread_bps/10000)
+        runs[name]=simulate_cash_sleeve(prices,base,cfg,p)
     return runs

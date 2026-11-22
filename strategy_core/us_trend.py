@@ -1,9 +1,9 @@
-"""V17 优化模块：美股多周期趋势 + 危机波动率刹车 + 迟滞过滤。
+"""Trend 优化模块：美股多周期趋势 + 危机波动率刹车 + 迟滞过滤。
 
 严格因果约束：
 - 仅使用截至第 t 周收盘的已知价格计算信号；
 - 交易在第 t+1 周开盘（或收盘敏感性口径）执行，无任何未来函数；
-- 保留原 V15 费率与资金守恒校验。
+- 保留原 USBase 费率与资金守恒校验。
 """
 from __future__ import annotations
 from dataclasses import dataclass
@@ -13,7 +13,7 @@ from strategy_core.us_strategy import USConfig, us_factors, simulate_us
 
 
 @dataclass(frozen=True)
-class USV17Config:
+class USTrendConfig:
     qqq_core: float = 0.30
     ma_windows: tuple[int, ...] = (10, 20, 30)
     hysteresis: float = 0.005       # 0.5% 上下迟滞带，减少均线反复打脸
@@ -38,7 +38,7 @@ class USV17Config:
             raise ValueError("rebalance_threshold invalid")
 
 
-def us_signals_v17(p: pd.DataFrame, cfg: USV17Config = USV17Config()) -> pd.DataFrame:
+def build_us_trend_signals(p: pd.DataFrame, cfg: USTrendConfig = USTrendConfig()) -> pd.DataFrame:
     cfg.validate()
     f = us_factors(p)
     scores = []
@@ -64,9 +64,9 @@ def us_signals_v17(p: pd.DataFrame, cfg: USV17Config = USV17Config()) -> pd.Data
     tactical = trend_score * vol_mult
     weight_qqq = (cfg.qqq_core + (1.0 - cfg.qqq_core) * tactical).clip(lower=cfg.qqq_core, upper=1.0)
 
-    f["us_v17_trend_score"] = trend_score
-    f["us_v17_realized_vol"] = rvol
-    f["us_v17_vol_mult"] = vol_mult
+    f["us_trend_score"] = trend_score
+    f["us_realized_vol"] = rvol
+    f["us_vol_mult"] = vol_mult
     f["target_qqq"] = weight_qqq
     f["target_bil"] = 1.0 - weight_qqq
     f["us_trend_decision"] = np.where(
@@ -76,12 +76,12 @@ def us_signals_v17(p: pd.DataFrame, cfg: USV17Config = USV17Config()) -> pd.Data
     return f
 
 
-def simulate_us_v17(
+def simulate_us_trend(
     p: pd.DataFrame,
-    cfg: USV17Config = USV17Config(),
+    cfg: USTrendConfig = USTrendConfig(),
     opens: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    sig = us_signals_v17(p, cfg)
+    sig = build_us_trend_signals(p, cfg)
     base_cfg = USConfig(
         qqq_core=cfg.qqq_core,
         qqq_side_fee=cfg.qqq_side_fee,

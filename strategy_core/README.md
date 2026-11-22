@@ -1,24 +1,49 @@
-# 当前策略核心（后续迭代唯一入口）
+# 现行量化策略核心（唯一维护入口）
 
-本目录与历史研究代码**彻底解耦**，提供给 `live/engine.py`、`live/decisions.py` 和最新看板的稳定策略接口。
+**生产策略不使用研究版本号命名。** `history/` 保留原 V1—V22 名字作为冻结研究来源，现行策略使用业务职责命名，后续改进直接在这里进行。
 
-## 模块布局
+## 稳定入口
 
-| 层 | 组件 | 用途 |
-| --- | --- | --- |
-| 基础模型 | `baselines/fusion_v5.py`—`fusion_v11.py` | 现行模型所需基础信号与五资产模拟器的**独立副本** |
-| 市场感知 | `market_snapshot.py`、`us_snapshot.py`、`crowding.py`、`cross_market.py`、`overnight.py` | A 股和美股数据、成交额拥挤度与跨市场门控 |
-| 趋势与分配 | `animal_state.py`、`regime.py`、`cn_strategy.py`、`us_strategy.py`、`us_trend.py`、`portfolio.py`、`daily_replay.py` | 多周期趋势、五资产组合、周频/日频策略 |
-| 风控与建议 | `public_rules.py`、`advisory.py`、`intraday.py`、`allocation.py` | 双市场建议、30 分钟盘中减仓、仓位约束 |
-| 绩效分析 | `metrics.py`、`analytics.py` | 归因、风险指标和研究看板 |
+```python
+from strategy_core.api import (
+    ChinaPortfolioConfig, USPortfolioConfig, PublicRuleConfig,
+    build_china_portfolio_weekly, build_us_portfolio,
+    evaluate_china_rule_blend, evaluate_us_rule_blend,
+    StopConfig, IntradayStopEngine, clip_weekly_risk_additions,
+)
 
-## 维护约定
+cn_cfg = ChinaPortfolioConfig()
+us_cfg = USPortfolioConfig()
+```
 
-- **只在本目录修改未来策略逻辑。** V13–V22 原始版本固定存入 `history/vXX` 供历史复现，不要修改那些文件来影响线上策略。
-- 新增核心能力请将 `live/` 调用保持在稳定、可测试接口；如需改变签名，同步更新 `tests/test_strategy_core.py`、在线回归用例及前端快照。
-- 禁止引入 `history.*`、根目录 `v13.*`—`v22.*` 依赖；已经引入的 V5–V11 基类通过 `strategy_core.baselines` 访问。
-- 历史策略并不因改目录而改善表现。新版本必须独立验证、记录数据来源、避免前视偏差，并在上线前比对组合输出与风控行为。
+生产调用方（`live/engine.py`、`live/decisions.py`）和生成看板的工具统一引用 `strategy_core.api`，避免与内部模块布局耦合。当前策略核心不允许导入 `history.*`。
+
+## 模块职责
+
+| 模块 | 责任 |
+| --- | --- |
+| `api.py` | 对外稳定语义接口，避免现行客户端绑定研究版本号 |
+| `portfolio.py` | 中美独立的多资产组合构建 |
+| `cn_strategy.py`、`us_trend.py`、`us_strategy.py` | 中国与美国交易信号、趋势状态、周频重平衡 |
+| `regime.py`、`crowding.py`、`cross_market.py`、`overnight.py` | 趋势状态、量价拥挤、隔夜事件与跨市场风险 |
+| `daily_replay.py` | 日频回放，保持因果顺序与次期开盘/收盘约束 |
+| `public_rules.py`、`advisory.py` | 可配置公开规则建议与双重否决门控 |
+| `intraday.py`、`allocation.py` | 盘中有效跌破后的分档减仓和新增风险约束 |
+| `analytics.py`、`metrics.py` | 可审计统计指标、信号历史和研究输出 |
+| `market_snapshot.py`、`us_snapshot.py` | 离线核验行情读取 |
+| `baselines/` | `trend_rotation`、`dividend_overlay`、`cash_sleeve`、`growth_reentry`、`momentum_risk`、`multi_asset`、`ensemble_guard` |
+
+## 命名和兼容规则
+
+- 新增类、函数、模块、数据列都使用**业务含义**命名，禁止生产代码出现 `V17Config`、`fusion_v10`、`v14_warning` 等研发版本号。
+- 冻结研究结果的原始标识（例如历史 CSV、研究报告、研究数据快照）继续保留，以维持出处和可复现性。
+- 这次属于**破坏旧字段名的生产接口重构**，`live` 输出字段、当前 Web/测试已经同步。外部使用旧 HTTP 属性（例如 `portfolio.v10_reason`）的代码需要按[迁移表](../docs/STRATEGY_API.md)更新。
+- 算法默认参数、阈值、执行时间和交易成本保持不变；数值一致性以冻结研究版本的目标仓位、NAV 对照测试作为准入条件。
+
+## 测试
 
 ```bash
-python -m pytest tests/test_strategy_core.py tests/test_live_dashboard.py tests/test_ptms.py tests/test_v22.py -q
+python -m pytest tests/test_strategy_naming.py tests/test_strategy_core.py -q
+python -m pytest tests -q
+node tests/ptms_smoke.cjs
 ```

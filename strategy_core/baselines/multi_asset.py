@@ -1,4 +1,4 @@
-"""V10: regime-aware, no-leverage multi-asset risk-budget overlay on V9.
+"""MultiAsset: regime-aware, no-leverage multi-asset risk-budget overlay on MomentumRisk.
 
 Assets: tech/ChiNext ETF, red/dividend ETF, 10Y CN government bond ETF,
 physical-gold ETF, cash/money ETF. All are adjusted-close proxies.
@@ -13,11 +13,11 @@ from dataclasses import dataclass
 from typing import Optional
 import numpy as np
 import pandas as pd
-from strategy_core.baselines.fusion_v5 import FusionConfig
-from strategy_core.baselines.fusion_v6 import V6Config
-from strategy_core.baselines.fusion_v7 import V7Config
-from strategy_core.baselines.fusion_v8 import V8Config
-from strategy_core.baselines.fusion_v9 import V9Config, signals_v9
+from strategy_core.baselines.trend_rotation import TrendRotationConfig
+from strategy_core.baselines.dividend_overlay import DividendOverlayConfig
+from strategy_core.baselines.cash_sleeve import CashSleeveConfig
+from strategy_core.baselines.growth_reentry import GrowthReentryConfig
+from strategy_core.baselines.momentum_risk import MomentumRiskConfig, build_momentum_risk_signals
 
 ASSETS=('tech','red','bond','gold','money')
 PRICES=('tech','red','bond_511260_adj','gold_518880_adj','cash_511880_adj')
@@ -25,7 +25,7 @@ TARGETS=('target_tech','target_red','target_bond','target_gold','target_money')
 
 
 @dataclass(frozen=True)
-class V10Config:
+class MultiAssetConfig:
     bond_cap:float=.30
     gold_cap:float=.15
     reserve_money:float=.08
@@ -39,9 +39,9 @@ class V10Config:
     min_red_core:float=.30
     signal_cash_hurdle:bool=True
     execution_rebalance_weeks:int=1  # 1 = all signals, optional 4-week execution experiment
-    execution_deadband:float=.12      # same 12% turnover deadband as V9; 0 disables
+    execution_deadband:float=.12      # same 12% turnover deadband as MomentumRisk; 0 disables
     urgent_cut_pp:float=.04
-    priority_exit:bool=False  # experimental; off to reproduce V9 execution
+    priority_exit:bool=False  # experimental; off to reproduce MomentumRisk execution
     tech_fee:float=.0015
     red_fee:float=.0015
     bond_fee:float=.0003
@@ -49,7 +49,7 @@ class V10Config:
     money_fee:float=.0001
 
 
-def validate(prices:pd.DataFrame,c:V10Config):
+def validate(prices:pd.DataFrame,c:MultiAssetConfig):
     if not set(PRICES).issubset(prices.columns):
         raise ValueError(f'五资产行情需包含{PRICES}')
     x=prices.loc[:,PRICES]
@@ -99,14 +99,14 @@ def _capped_inverse_vol(available:float,elig:list[bool],vol:list[float],caps:lis
     return chosen
 
 
-def signals_v10(prices:pd.DataFrame,base:FusionConfig,model:V6Config,
-                cash:V7Config,c:V10Config=V10Config(),
-                v9:V9Config=V9Config(),v8:V8Config=V8Config()) ->pd.DataFrame:
+def build_multi_asset_signals(prices:pd.DataFrame,base:TrendRotationConfig,model:DividendOverlayConfig,
+                cash:CashSleeveConfig,c:MultiAssetConfig=MultiAssetConfig(),
+                risk_cfg:MomentumRiskConfig=MomentumRiskConfig(),reentry_cfg:GrowthReentryConfig=GrowthReentryConfig()) ->pd.DataFrame:
     validate(prices,c)
-    if base.frequency!='week':raise ValueError('V10 使用周频信号')
+    if base.frequency!='week':raise ValueError('MultiAsset 使用周频信号')
     if c.min_red_core>cash.red_core+1e-10:
-        raise ValueError('V10最低红利核心不得高于V9设定的核心')
-    f=signals_v9(prices,base,model,cash,v9,v8).copy()
+        raise ValueError('MultiAsset最低红利核心不得高于MomentumRisk设定的核心')
+    f=build_momentum_risk_signals(prices,base,model,cash,risk_cfg,reentry_cfg).copy()
     returns=prices.loc[:,PRICES].pct_change(fill_method=None)
     asset_vol=returns.rolling(c.volatility_weeks,min_periods=c.volatility_weeks).std(ddof=1)*np.sqrt(52)
     money=prices.cash_511880_adj
@@ -163,12 +163,12 @@ def signals_v10(prices:pd.DataFrame,base:FusionConfig,model:V6Config,
                        ('；组合波动风险缩放' if risk_scale<1-1e-5 else ''))
     f[list(TARGETS)]=pd.DataFrame(weights,index=f.index,columns=list(TARGETS))
     f[['uncapped_portfolio_vol','estimated_portfolio_vol','portfolio_risk_multiplier']]=pd.DataFrame(risks,index=f.index)
-    f['v10_reason']=reasons
+    f['allocation_reason']=reasons
     return f
 
 
-def simulate_v10(prices:pd.DataFrame,signals:pd.DataFrame,
-                 c:V10Config=V10Config(),execution:bool=True)->pd.DataFrame:
+def simulate_multi_asset(prices:pd.DataFrame,signals:pd.DataFrame,
+                 c:MultiAssetConfig=MultiAssetConfig(),execution:bool=True)->pd.DataFrame:
     validate(prices,c)
     if len(prices)!=len(signals) or not prices.index.equals(signals.index):
         raise ValueError('信号与价格日期必须完全一致')
@@ -211,9 +211,9 @@ def simulate_v10(prices:pd.DataFrame,signals:pd.DataFrame,
     return out
 
 
-def baseline_5asset_signals(v9signals:pd.DataFrame)->pd.DataFrame:
-    """Precisely represent the V9 tech/red/money allocation in five dimensions."""
-    f=v9signals.copy()
+def baseline_5asset_signals(risk_signals:pd.DataFrame)->pd.DataFrame:
+    """Precisely represent the MomentumRisk tech/red/money allocation in five dimensions."""
+    f=risk_signals.copy()
     f['target_bond']=0.;f['target_gold']=0.;f['target_money']=f.target_cash
     return f
 

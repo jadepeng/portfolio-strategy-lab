@@ -1,6 +1,6 @@
-"""V21: provenance-first strategy audit, execution robustness and forward-signal ledger.
+"""Analytics: provenance-first strategy audit, execution robustness and forward-signal ledger.
 
-No newly optimized trading rule. Published V18 frozen baselines and V20 advisory
+No newly optimized trading rule. Published Portfolio frozen baselines and PublicRules advisory
 candidate are preserved. The promotion gate is deliberately conservative and
 cannot be used to infer prospective profitability from tuning-exposed years.
 """

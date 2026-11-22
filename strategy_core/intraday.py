@@ -279,7 +279,7 @@ def make_daily_lines(bars:pd.DataFrame,cfg:StopConfig,
 
 def simulate_asset(bars:pd.DataFrame,symbol:str,cfg:StopConfig,*,start_weight:float=1.,
                    daily_context:pd.Series|None=None)->tuple[pd.DataFrame,pd.DataFrame]:
-    """Single-instrument+cash research illustration; not the full V18 portfolio.
+    """Single-instrument+cash research illustration; not the full Portfolio portfolio.
 
     Starts fully invested on the first day with sufficient 20-day history.
     A stop reduction remains in cash through the end of snapshot; does NOT

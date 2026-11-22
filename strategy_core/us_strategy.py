@@ -1,7 +1,7 @@
 """Standalone U.S. tactical strategy: 30-week Nasdaq trend and optional QQQ core.
 
 Only weekly Friday-closing data is used for a signal. Fills at the NEXT weekly
-close, matching the original V14 backtest execution convention. No shorting.
+close, matching the original Crowding backtest execution convention. No shorting.
 The U.S. 'volume/crowding' overlay is deliberately *not* forced into the base
 strategy because it failed the earlier comparative backtest.
 """

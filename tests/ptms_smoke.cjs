@@ -83,7 +83,7 @@ const samplePtmsState = {
       tech: { close: 2.23, temperature: '冻', stage: 0, ma_fast: 2.51, ma_slow: 3.43, mom_fast: -0.27, mom_slow: -0.43, momentum: -0.34, vs_red_6w: -0.26, vol: 0.29, dd: -0.47, reentry_state: 'off', probe_signal: false, confirm_signal: false },
       red: { close: 1.368, temperature: '温', stage: 4, ma_fast: 1.366, ma_slow: 1.348, mom_fast: -0.01, mom_slow: 0.029, vol: 0.123 },
       defensive: { bond_eligible: true, bond_mom_fast: 0.011, bond_target: 0.35, gold_eligible: false, gold_mom_fast: -0.22, gold_target: 0 },
-      portfolio: { estimated_vol: 0.07, risk_multiplier: 1.0, market_liquidity_ratio: 0.94, market_turn_100m: 13508, tech_share_pct: 5.2, red_share_pct: 3.1, us_risk_state_lagged: '熊市趋势', cross_market_reason: 'US熊市：限制新增创业板仓', v10_reason: '国债/黄金不合格', v14_warning: true },
+      portfolio: { estimated_vol: 0.07, risk_multiplier: 1.0, market_liquidity_ratio: 0.94, market_turn_100m: 13508, tech_share_pct: 5.2, red_share_pct: 3.1, us_risk_state_lagged: '熊市趋势', cross_market_reason: 'US熊市：限制新增创业板仓', allocation_reason: '国债/黄金不合格', market_warning: true },
     },
     US: {
       source: 'research_fallback',

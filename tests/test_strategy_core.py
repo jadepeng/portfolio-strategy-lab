@@ -87,12 +87,12 @@ def test_archived_versions_do_not_import_current_strategy():
 
 
 def test_current_baseline_defaults_match_frozen_v10_v11():
-    from strategy_core.baselines.fusion_v10 import V10Config as CurrentV10
+    from strategy_core.baselines.multi_asset import MultiAssetConfig as CurrentAllocation
     from history.strategies.fusion_v10 import V10Config as ArchivedV10
-    from strategy_core.baselines.fusion_v11 import V11Config as CurrentV11
+    from strategy_core.baselines.ensemble_guard import EnsembleRiskConfig as CurrentGuard
     from history.strategies.fusion_v11 import V11Config as ArchivedV11
-    assert asdict(CurrentV10()) == asdict(ArchivedV10())
-    assert asdict(CurrentV11()) == asdict(ArchivedV11())
+    assert asdict(CurrentAllocation()) == asdict(ArchivedV10())
+    assert asdict(CurrentGuard()) == asdict(ArchivedV11())
 
 
 def test_intraday_stop_matches_frozen_version_on_deterministic_prices():
@@ -104,14 +104,14 @@ def test_intraday_stop_matches_frozen_version_on_deterministic_prices():
 
 
 def test_current_execution_contract_exports_are_available():
-    from strategy_core.portfolio import V18CNConfig, build_cn_v18_weekly, build_us_v18
-    from strategy_core.advisory import run_cn_v20, run_us_v20
-    from strategy_core.public_rules import V20Config
+    from strategy_core.portfolio import ChinaPortfolioConfig, build_china_portfolio_weekly, build_us_portfolio
+    from strategy_core.advisory import evaluate_china_rule_blend, evaluate_us_rule_blend
+    from strategy_core.public_rules import PublicRuleConfig
     from strategy_core.intraday import IntradayStopEngine
     from strategy_core.allocation import clip_weekly_risk_additions
 
-    assert all((V18CNConfig, build_cn_v18_weekly, build_us_v18, run_cn_v20,
-                run_us_v20, V20Config, IntradayStopEngine, clip_weekly_risk_additions))
+    assert all((ChinaPortfolioConfig, build_china_portfolio_weekly, build_us_portfolio, evaluate_china_rule_blend,
+                evaluate_us_rule_blend, PublicRuleConfig, IntradayStopEngine, clip_weekly_risk_additions))
 
 def test_legacy_streamlit_pages_archived_for_multipage_navigation():
     assert not (ROOT / "pages").exists()

@@ -19,6 +19,10 @@ jobs:
         run: python -m pip install -r requirements.txt
       - name: Run all strategy, data gate, ledger, and intraday tests
         run: python -m pytest tests -q
+      - name: Rebuild frozen research dashboards via semantic strategy API
+        run: |
+          python scripts/build_v21_dashboard.py
+          python scripts/build_v22_dashboard.py
 
   web-smoke:
     runs-on: ubuntu-latest

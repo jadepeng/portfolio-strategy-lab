@@ -1,4 +1,4 @@
-"""Recompute existing V18/V20 engines using a separate, coherent live dataset."""
+"""Recompute existing production portfolio and advisory engines using a separate, coherent live dataset."""
 from __future__ import annotations
 
 import hashlib
@@ -7,15 +7,17 @@ import pandas as pd
 from live.market import SYMBOLS, ZONES, RISK_SYMBOLS, validate_frame
 from live.backtest import run_bt_reference
 from live.store import clean_bool, clean_float
-from strategy_core.portfolio import build_cn_v18_weekly, build_us_v18
-from strategy_core.advisory import run_advisory_cn, run_advisory_us, run_cn_v20, run_us_v20
-from strategy_core.public_rules import V20Config
-from strategy_core.analytics import describe, equity_curve, yearly, latest_weights, frozen_signal_record, verify_market_history
-from strategy_core.intraday import StopConfig, IntradayStopEngine, normalize_bars, stop_line
+from strategy_core.api import (
+    build_china_portfolio_weekly, build_us_portfolio,
+    run_advisory_cn, run_advisory_us, evaluate_china_rule_blend, evaluate_us_rule_blend,
+    PublicRuleConfig, describe, equity_curve, yearly, latest_weights,
+    frozen_signal_record, verify_market_history, StopConfig, IntradayStopEngine,
+    normalize_bars, stop_line, load_weekly, load_us_prices, load_us_open,
+)
 
 
 def extract_cn_indicators(p: pd.DataFrame, sig_df: pd.DataFrame, market_tape: pd.DataFrame) -> dict:
-    """Extract rich decision-grade CN indicators from already-computed V18 signals."""
+    """Extract rich decision-grade CN indicators from already-computed production portfolio signals."""
     s = sig_df.iloc[-1]
     t = market_tape.iloc[-1]
     ratio_series = market_tape.market_turn_100m.rolling(4).mean() / market_tape.market_turn_100m.rolling(13).mean()
@@ -43,11 +45,11 @@ def extract_cn_indicators(p: pd.DataFrame, sig_df: pd.DataFrame, market_tape: pd
             'breakout': clean_bool(s.get('tech_breakout')),
             'vol': clean_float(s.get('tech_vol'), ndigits=5),
             'dd': clean_float(s.get('tech_dd'), ndigits=5),
-            'vs_red_6w': clean_float(s.get('v9_tech_vs_red_6w'), ndigits=5),
+            'vs_red_6w': clean_float(s.get('tech_vs_dividend_6w'), ndigits=5),
             'relative_mom': clean_float(s.get('relative'), ndigits=5),
-            'reentry_state': str(s.get('v8_reentry_state', 'off')),
-            'probe_signal': clean_bool(s.get('v8_probe_signal')),
-            'confirm_signal': clean_bool(s.get('v8_confirm_signal')),
+            'reentry_state': str(s.get('reentry_state', 'off')),
+            'probe_signal': clean_bool(s.get('reentry_probe_signal')),
+            'confirm_signal': clean_bool(s.get('reentry_confirm_signal')),
             'target_weight': clean_float(s.get('target_tech'), ndigits=5),
         },
         'red': {
@@ -65,7 +67,7 @@ def extract_cn_indicators(p: pd.DataFrame, sig_df: pd.DataFrame, market_tape: pd
             'breakout': clean_bool(s.get('red_breakout')),
             'vol': clean_float(s.get('red_vol'), ndigits=5),
             'dd': clean_float(s.get('red_dd'), ndigits=5),
-            'eligible': clean_bool(s.get('v6_red_eligible')),
+            'eligible': clean_bool(s.get('dividend_eligible')),
             'target_weight': clean_float(s.get('target_red'), ndigits=5),
         },
         'defensive': {
@@ -90,11 +92,11 @@ def extract_cn_indicators(p: pd.DataFrame, sig_df: pd.DataFrame, market_tape: pd
             'uncapped_vol': clean_float(s.get('uncapped_portfolio_vol'), ndigits=5),
             'estimated_vol': clean_float(s.get('estimated_portfolio_vol'), ndigits=5),
             'risk_multiplier': clean_float(s.get('portfolio_risk_multiplier'), ndigits=5),
-            'v10_reason': str(s.get('v10_reason', '')),
-            'v13_regime_active': clean_bool(s.get('v13_regime_active')),
-            'v13_explanation': str(s.get('v13_explanation', '')),
-            'v14_warning': clean_bool(s.get('v14_warning')),
-            'v14_reason': str(s.get('v14_reason', '')),
+            'allocation_reason': str(s.get('allocation_reason', '')),
+            'regime_active': clean_bool(s.get('regime_active')),
+            'regime_explanation': str(s.get('regime_explanation', '')),
+            'market_warning': clean_bool(s.get('market_warning')),
+            'market_reason': str(s.get('market_reason', '')),
             'market_weak': clean_bool(s.get('market_weak')),
             'crowding_proxy': clean_bool(s.get('crowding_proxy')),
             'growth_leader_weak': clean_bool(s.get('growth_leader_weak')),
@@ -111,7 +113,7 @@ def extract_cn_indicators(p: pd.DataFrame, sig_df: pd.DataFrame, market_tape: pd
 
 
 def extract_us_indicators(p: pd.DataFrame, sig_df: pd.DataFrame) -> dict:
-    """Extract rich decision-grade US indicators from already-computed V18 signals."""
+    """Extract rich decision-grade US indicators from already-computed production portfolio signals."""
     s = sig_df.iloc[-1]
     qqq_close = float(p.QQQ.iloc[-1])
     qqq_10w = float(p.QQQ.tail(10).mean())
@@ -121,10 +123,10 @@ def extract_us_indicators(p: pd.DataFrame, sig_df: pd.DataFrame) -> dict:
         'asof_week_start': str(sig_df.index[-1].date()),
         'risk_state': str(s.get('us_risk_state', '')),
         'trend_decision': str(s.get('us_trend_decision', '')),
-        'trend_score': clean_float(s.get('us_v17_trend_score'), ndigits=4),
-        'realized_vol': clean_float(s.get('us_v17_realized_vol'), ndigits=5),
+        'trend_score': clean_float(s.get('us_trend_score'), ndigits=4),
+        'realized_vol': clean_float(s.get('us_realized_vol'), ndigits=5),
         'vol_cap': 0.24,
-        'vol_multiplier': clean_float(s.get('us_v17_vol_mult'), ndigits=4),
+        'vol_multiplier': clean_float(s.get('us_vol_mult'), ndigits=4),
         'qqq_close': clean_float(qqq_close, ndigits=3),
         'qqq_10w': clean_float(qqq_10w, ndigits=3),
         'qqq_20w': clean_float(qqq_20w, ndigits=3),
@@ -150,11 +152,9 @@ def extract_us_indicators(p: pd.DataFrame, sig_df: pd.DataFrame) -> dict:
 
 
 def build_research_indicators(root) -> dict:
-    """Compute baseline V18 indicators from offline verified snapshots for fallback use."""
+    """Compute baseline portfolio indicators from offline verified snapshots for fallback use."""
     try:
         from pathlib import Path
-        from strategy_core.market_snapshot import load_weekly
-        from strategy_core.us_snapshot import load_us_prices, load_us_open
 
         base_dir = Path(root)
         cn_path = base_dir / 'market_data' / 'verified_5asset_weekly_v13.csv'
@@ -164,8 +164,8 @@ def build_research_indicators(root) -> dict:
         us = load_us_prices()
         op = load_us_open()
         tape = load_weekly()
-        _, cn_sig, _ = build_cn_v18_weekly(cn, tape, us)
-        us_sig, _ = build_us_v18(us, opens=op)
+        _, cn_sig, _ = build_china_portfolio_weekly(cn, tape, us)
+        us_sig, _ = build_us_portfolio(us, opens=op)
         return {
             'CN': extract_cn_indicators(cn, cn_sig, tape),
             'US': extract_us_indicators(us, us_sig),
@@ -264,12 +264,12 @@ def recompute(daily, tape, clock, now, source):
     if 'US' in prices:
         try:
             p, op = prices['US'], opens['US']
-            base, hist = build_us_v18(p, opens=op)
+            base, hist = build_us_portfolio(p, opens=op)
             _, advisory, _, ahist = run_advisory_us(p, op)
-            blend = run_us_v20(p, op, V20Config(us_blend=.25))
+            blend = evaluate_us_rule_blend(p, op, PublicRuleConfig(us_blend=.25))
             result['models']['US'] = pack_models('US', {
-                'baseline': ('V18 多周期趋势 · 在线重算', base, hist),
-                'advisory': ('V20 双重否决 · 在线研究', advisory, ahist),
+                'baseline': ('多周期趋势 · 在线重算', base, hist),
+                'advisory': ('双重风险否决 · 在线研究', advisory, ahist),
                 'blend25': ('25%公开规则融合 · 在线研究', blend['signal'], blend['ledger'])}, cutoffs['US'])
             sig = base.iloc[-1]
             try:
@@ -277,9 +277,9 @@ def recompute(daily, tape, clock, now, source):
             except Exception as error:
                 result['external_backtests']['US'] = {'state': 'failed', 'message': type(error).__name__ + '：bt 对照失败'}
             result['signals']['US'] = {'risk': str(sig.get('us_risk_state', '')),
-                'trend_score': float(sig.get('us_v17_trend_score', 0)), 'qqq_close': float(p.QQQ.iloc[-1]),
+                'trend_score': float(sig.get('us_trend_score', 0)), 'qqq_close': float(p.QQQ.iloc[-1]),
                 'qqq_ma30': float(p.QQQ.tail(30).mean()), 'spy_close': float(p.SPY.iloc[-1]),
-                'vol_multiplier': float(sig.get('us_v17_vol_mult', 1)), 'description': str(sig.us_trend_decision)}
+                'vol_multiplier': float(sig.get('us_vol_mult', 1)), 'description': str(sig.us_trend_decision)}
             result['indicators']['US'] = extract_us_indicators(p, base)
         except Exception as error:
             result['strategy_status']['US'] = {'state': 'unavailable', 'message': type(error).__name__ + '：策略重算失败'}
@@ -292,12 +292,12 @@ def recompute(daily, tape, clock, now, source):
                 raise ValueError('本周美股尚未完整收盘或数据滞后，等待跨市场完整周输入后重算A股')
             p = prices['CN']
             market_tape = weekly_tape(tape, p, clock, now)
-            _, base, hist = build_cn_v18_weekly(p, market_tape, prices['US'])
+            _, base, hist = build_china_portfolio_weekly(p, market_tape, prices['US'])
             _, advisory, _, ahist = run_advisory_cn(p, market_tape, prices['US'])
-            blend = run_cn_v20(p, market_tape, prices['US'], V20Config(cn_blend=.25))
+            blend = evaluate_china_rule_blend(p, market_tape, prices['US'], PublicRuleConfig(cn_blend=.25))
             result['models']['CN'] = pack_models('CN', {
-                'baseline': ('V18 五资产轮动 · 在线重算', base, hist),
-                'advisory': ('V20 双重否决 · 在线研究', advisory, ahist),
+                'baseline': ('五资产轮动 · 在线重算', base, hist),
+                'advisory': ('双重风险否决 · 在线研究', advisory, ahist),
                 'blend25': ('25%公开规则融合 · 在线研究', blend['signal'], blend['ledger'])}, cutoffs['CN'])
             sig = base.iloc[-1]
             try:
@@ -336,7 +336,7 @@ def recompute(daily, tape, clock, now, source):
 
 
 def monitor(symbol, bars, raw_daily, clock, now):
-    """Observe V22 confirmations only; no inferred fills, holdings or cooldowns."""
+    """Observe intraday stop confirmations only; no inferred fills, holdings or cooldowns."""
     region = SYMBOLS[symbol][1]
     cfg = StopConfig(market=region, core_floor=.30 if region == 'US' else .20 if symbol == '515180.SH' else 0)
     f = normalize_bars(validate_frame(bars, intraday=True), cfg)
