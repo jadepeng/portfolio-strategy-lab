@@ -14,6 +14,9 @@ from .market_snapshot import load_weekly
 from .us_snapshot import load_us_prices, load_us_open
 from .intraday import StopConfig, IntradayStopEngine, normalize_bars, stop_line
 from .allocation import clip_weekly_risk_additions
+from .risk_parity_sleeve import RiskParityConfig, blend_targets, RP40_SHARE
+from .fee_calibration import calibrate_from_store, MIN_FILLS as FEE_MIN_FILLS
+from .baselines.multi_asset import simulate_multi_asset
 
 __all__ = [
     "ChinaPortfolioConfig", "USPortfolioConfig", "PublicRuleConfig",
@@ -23,4 +26,6 @@ __all__ = [
     "execution_gate", "frozen_signal_record", "sha256_file",
     "load_weekly", "load_us_prices", "load_us_open",
     "StopConfig", "IntradayStopEngine", "normalize_bars", "stop_line", "clip_weekly_risk_additions",
+    "RiskParityConfig", "blend_targets", "RP40_SHARE",
+    "calibrate_from_store", "FEE_MIN_FILLS", "simulate_multi_asset",
 ]

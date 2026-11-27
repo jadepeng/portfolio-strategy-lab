@@ -7,6 +7,7 @@
     baseline: '稳健组合基准',
     advisory: '双重风控建议',
     blend25: '25% 混合增强',
+    rp40: '40% 风险平价底仓',
   };
   const ACCOUNT_NAMES = {
     CN_MAIN: 'A股账户',
@@ -924,8 +925,41 @@
           </div>
         </article>
       </div>
+
+      ${renderFeeCalibration(rev.fee_calibration)}
     `;
     drawReviewChart(rev.twr_curve, rev.benchmark_curve);
+  }
+
+  const FEE_BUCKET_LABELS = { tech: '创业板', red: '红利', bond: '国债', gold: '黄金', money: '货币', qqq: 'QQQ', bil: 'BIL' };
+
+  function renderFeeCalibration(fc) {
+    if (!fc) return '';
+    if (fc.state !== 'available') {
+      return `<article class="panel full"><div class="panel-top"><div><span class="micro">COST CALIBRATION</span><h3>交易成本校准</h3></div></div><p class="empty">${esc(fc.message || '暂无数据')}</p></article>`;
+    }
+    const bp = (v) => (v == null ? '—' : `${fmtNum(v, 2)} 基点`);
+    const wi = fc.what_if;
+    return `
+      <article class="panel full">
+        <div class="panel-top"><div><span class="micro">COST CALIBRATION</span><h3>交易成本校准：真实成交 vs 回测假设</h3></div></div>
+        ${wi ? `<div class="kpi-grid">
+          <div class="kpi-card" style="--accent:#14a989"><div class="kpi-caption"><span>按真实费率重算策略年化</span><span class="kpi-icon">≈</span></div>
+            <strong class="kpi-value ${wi.cagr_delta_pp >= 0 ? 'positive' : 'negative'}">${fmtPct(wi.calibrated.cagr_pct)}</strong>
+            <div class="kpi-foot">回测假设 ${fmtPct(wi.assumed.cagr_pct)} · 差异 ${wi.cagr_delta_pp >= 0 ? '+' : ''}${fmtNum(wi.cagr_delta_pp, 2)} pp</div></div>
+          <div class="kpi-card" style="--accent:#e4a64d"><div class="kpi-caption"><span>累计费用（占初始资金）</span><span class="kpi-icon">¥</span></div>
+            <strong class="kpi-value">${fmtNum(wi.calibrated.fee_initial_pct, 2)}%</strong>
+            <div class="kpi-foot">回测假设 ${fmtNum(wi.assumed.fee_initial_pct, 2)}% · 截至 ${esc(wi.cutoff)}</div></div>
+        </div>` : ''}
+        <div class="table-wrap"><table>
+          <thead><tr><th>资产</th><th>有效成交</th><th>实测中位</th><th>实测P75</th><th>回测假设</th><th>采用</th><th>状态</th></tr></thead>
+          <tbody>${(fc.buckets || []).map((b) => `
+            <tr><td>${esc(FEE_BUCKET_LABELS[b.bucket] || b.bucket)}</td><td>${b.fills}</td><td>${bp(b.median_bp)}</td><td>${bp(b.p75_bp)}</td>
+            <td>${bp(b.assumed_bp)}</td><td><strong>${bp(b.applied_bp)}</strong></td>
+            <td><span class="ptms-badge ${b.source === 'calibrated' ? 'green' : 'amber'}">${b.source === 'calibrated' ? '已校准' : '样本不足'}</span></td></tr>`).join('')}
+          </tbody></table></div>
+        <div class="chart-footer"><span>有效费率 = 显式费用 / 成交额 + 相对计划参考价的不利滑点；取 P75，且不低于安全下限、不高于回测假设</span><span>${esc(fc.note || '')}</span></div>
+      </article>`;
   }
 
   function renderCurrentPtmsView(view) {
@@ -1326,6 +1360,7 @@
             <option value="baseline" ${account.strategy_version === 'baseline' ? 'selected' : ''}>稳健组合基准</option>
             <option value="advisory" ${account.strategy_version === 'advisory' ? 'selected' : ''}>双重风控建议</option>
             <option value="blend25" ${account.strategy_version === 'blend25' ? 'selected' : ''}>25% 混合增强</option>
+            ${account.market === 'CN' ? `<option value="rp40" ${account.strategy_version === 'rp40' ? 'selected' : ''}>40% 风险平价底仓（A股）</option>` : ''}
           </select>
         </div>
         <div class="ptms-field"><label>周频调仓偏离阈值 (%)</label><input type="number" step="1" min="0" max="40" name="deadband_pct" value="${fmtNum(account.rebalance_deadband * 100, 0)}" required /></div>

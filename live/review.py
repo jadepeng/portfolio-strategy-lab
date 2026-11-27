@@ -429,6 +429,21 @@ def render_review_markdown(report: dict[str, Any]) -> str:
             f"| {p['symbol']} | {p['name']} | {p['shares']:g} | {p['sellable_shares']:g} | "
             f"{p['avg_cost']:.4f} | {px_str} | {p['actual_weight']*100:.1f}% | {p['unrealized_pnl']:+,.2f} |"
         )
+    fc = report.get('fee_calibration') or {}
+    if fc.get('state') == 'available':
+        lines.extend(["", "## 交易成本校准（真实成交 vs 回测假设）", "",
+                      "| 资产 | 有效成交 | 实测中位 bp | 实测P75 bp | 回测假设 bp | 采用 bp | 状态 |",
+                      "|---|---:|---:|---:|---:|---:|---|"])
+        for b in fc.get('buckets', []):
+            fmt = lambda v: '—' if v is None else f"{v:g}"
+            lines.append(f"| {b['bucket']} | {b['fills']} | {fmt(b['median_bp'])} | {fmt(b['p75_bp'])} | "
+                         f"{fmt(b['assumed_bp'])} | {fmt(b['applied_bp'])} | {'已校准' if b['source'] == 'calibrated' else '样本不足'} |")
+        wi = fc.get('what_if')
+        if wi:
+            lines.append("")
+            lines.append(f"- 同期策略按真实费率重算：CAGR `{wi['assumed']['cagr_pct']}%` → `{wi['calibrated']['cagr_pct']}%`"
+                         f"（{wi['cagr_delta_pp']:+} pp），累计费用 `{wi['assumed']['fee_initial_pct']}%` → `{wi['calibrated']['fee_initial_pct']}%`")
+        lines.append(f"- {fc.get('note', '')}")
     lines.extend(["", "## 四、复盘笔记与自我反思", ""])
     notes = report.get('notes') or []
     if not notes:

@@ -24,7 +24,10 @@ from live.importer import commit_broker_csv, preview_broker_csv
 from live.market import MarketClock, RISK_SYMBOLS, SYMBOLS, utc_now
 from live.notifications import evaluate_and_emit_notifications
 from live.review import build_review_report, render_review_markdown
+from strategy_core.api import calibrate_from_store, describe, simulate_multi_asset, USPortfolioConfig
 from live.store import INSTRUMENT_META, TradingStore, clean_float, market_today, now_iso
+
+NO_FALLBACK_VERSIONS = frozenset({'rp40'})
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -56,6 +59,7 @@ class LiveService:
         self.wake, self.stopped = threading.Event(), threading.Event()
         self.worker = None
         self.research = load_research(root)
+        self.sim_inputs = {}  # market -> recompute inputs for fee what-if (memory only)
         self.research_indicators = build_research_indicators(root)
         self.store = TradingStore(root/'market_data'/'personal_trading.db')
         self.cache = root/'market_data'/'live_cache'/'last_good.json'
@@ -133,7 +137,9 @@ class LiveService:
                     except Exception as error:
                         errors['tape'] = type(error).__name__ + '：指数成交额不可用，A股新信号暂停'
                     computed = recompute(self.daily, self.tape, self.clock, utc_now(), self.provider.name)
+                    sim_inputs = computed.pop('_sim_inputs', {})
                     with self.lock:
+                        self.sim_inputs.update(sim_inputs)
                         # Keep last successful model per market but label failed refresh.
                         self.live['models'].update(computed['models'])
                         self.live['signals'].update(computed['signals'])
@@ -263,6 +269,10 @@ class LiveService:
         res_market = self.research.get('models', {}).get(market) or {}
         if strategy_version in res_market:
             return res_market[strategy_version]
+        if strategy_version in NO_FALLBACK_VERSIONS:
+            # rp40 has no frozen research snapshot. Returning {} makes the data gate
+            # BLOCK the plan rather than silently executing the V18 baseline instead.
+            return {}
         return live_market.get('baseline') or res_market.get('baseline') or {}
 
     def _indicators_with_fallback(self):
@@ -424,7 +434,7 @@ class LiveService:
         today_str = market_today(account['market'], now_ts)
         portfolio = self.store.get_portfolio(account_id, prices, today_local_date=today_str)
         weekly_model = self._select_weekly_model(account['market'], account['strategy_version'])
-        return build_review_report(
+        report = build_review_report(
             self.store,
             account,
             portfolio,
@@ -433,6 +443,37 @@ class LiveService:
             prices,
             today_str,
         )
+        try:
+            report['fee_calibration'] = self._fee_calibration(account)
+        except Exception as error:  # diagnostics must never break the review page
+            report['fee_calibration'] = {'state': 'failed', 'message': type(error).__name__ + '：费率校准失败'}
+        return report
+
+    def _fee_calibration(self, account):
+        """Real-fill fee rates vs backtest assumptions + what-if NAV. Never alters live signals."""
+        market, version = account['market'], account['strategy_version']
+        with self.lock:
+            sim = self.sim_inputs.get(market)
+        if market == 'CN':
+            if not sim:
+                return {'state': 'waiting', 'message': '等待A股在线重算完成后生成费率对比'}
+            base_cfg = sim['cfg']
+        else:
+            base_cfg = USPortfolioConfig()
+        cal_cfg, buckets = calibrate_from_store(self.store, account['account_id'], base_cfg, INSTRUMENT_META, market)
+        out = {'state': 'available', 'market': market, 'strategy_version': version,
+               'buckets': buckets, 'calibrated_any': any(b['source'] == 'calibrated' for b in buckets),
+               'note': '仅用于复盘对比：实盘信号与晋级门槛仍使用冻结的研究费率。'}
+        signals = (sim or {}).get('signals', {}).get(version)
+        if market == 'CN' and signals is not None:
+            assumed = describe(simulate_multi_asset(sim['prices'], signals, base_cfg))
+            calibrated = describe(simulate_multi_asset(sim['prices'], signals, cal_cfg))
+            keys = ('cagr_pct', 'max_dd_pct', 'fee_initial_pct')
+            out['what_if'] = {'cutoff': sim['cutoff'],
+                              'assumed': {k: assumed[k] for k in keys},
+                              'calibrated': {k: calibrated[k] for k in keys},
+                              'cagr_delta_pp': round(calibrated['cagr_pct'] - assumed['cagr_pct'], 3)}
+        return out
 
     def handle_ptms_post(self, path, body):
         if not isinstance(body, dict):
