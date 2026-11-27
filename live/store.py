@@ -87,7 +87,9 @@ INSTRUMENT_META: dict[str, dict[str, Any]] = {
 }
 
 MARKET_TIMEZONES = {'CN': 'Asia/Shanghai', 'US': 'America/New_York'}
-VALID_STRATEGY_VERSIONS = ('baseline', 'advisory', 'blend25')
+VALID_STRATEGY_VERSIONS = ('baseline', 'advisory', 'blend25', 'rp40')
+# Versions that exist only for one market; never silently fall back to baseline.
+MARKET_ONLY_VERSIONS = {'rp40': 'CN'}
 VALID_ACCOUNT_MODES = ('REAL', 'DEMO')
 VALID_EVENT_TYPES = (
     'INIT_POSITION',
@@ -791,6 +793,8 @@ class TradingStore:
             next_ver = acc['strategy_version'] if strategy_version is None else str(strategy_version)
             if next_ver not in VALID_STRATEGY_VERSIONS:
                 raise ValueError(f'无效策略版本: {next_ver}')
+            if MARKET_ONLY_VERSIONS.get(next_ver, acc['market']) != acc['market']:
+                raise ValueError(f'策略版本 {next_ver} 仅适用于 {MARKET_ONLY_VERSIONS[next_ver]} 账户')
             next_mode = acc.get('account_mode', 'REAL') if account_mode is None else str(account_mode).upper()
             if next_mode not in VALID_ACCOUNT_MODES:
                 raise ValueError(f'无效账户模式: {next_mode}')

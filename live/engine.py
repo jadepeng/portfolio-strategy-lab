@@ -13,6 +13,7 @@ from strategy_core.api import (
     PublicRuleConfig, describe, equity_curve, yearly, latest_weights,
     frozen_signal_record, verify_market_history, StopConfig, IntradayStopEngine,
     normalize_bars, stop_line, load_weekly, load_us_prices, load_us_open,
+    blend_targets, RP40_SHARE, simulate_multi_asset,
 )
 
 
@@ -254,7 +255,9 @@ def recompute(daily, tape, clock, now, source):
     labeled online recomputations, not stitched onto the frozen research NAV.
     """
     result = {'models': {}, 'signals': {}, 'indicators': {}, 'quality': [], 'frozen_signals': [],
-              'liquidity': [], 'strategy_status': {}, 'external_backtests': {}, 'computed_at': now.isoformat()}
+              'liquidity': [], 'strategy_status': {}, 'external_backtests': {}, 'computed_at': now.isoformat(),
+              # in-memory only (DataFrames): popped by the service, never serialized
+              '_sim_inputs': {}}
     prices, opens, cutoffs = {}, {}, {}
     for market in ('CN', 'US'):
         try:
@@ -292,13 +295,20 @@ def recompute(daily, tape, clock, now, source):
                 raise ValueError('本周美股尚未完整收盘或数据滞后，等待跨市场完整周输入后重算A股')
             p = prices['CN']
             market_tape = weekly_tape(tape, p, clock, now)
-            _, base, hist = build_china_portfolio_weekly(p, market_tape, prices['US'])
+            cn_cfg, base, hist = build_china_portfolio_weekly(p, market_tape, prices['US'])
             _, advisory, _, ahist = run_advisory_cn(p, market_tape, prices['US'])
+            # rp40: V18 targets blended with 40% risk-parity sleeve, executed by the
+            # SAME engine (deadband / fees / priority exit) — no separate accounting.
+            rp40 = blend_targets(p, base, RP40_SHARE)
+            rp40_hist = simulate_multi_asset(p, rp40, cn_cfg)
+            result['_sim_inputs']['CN'] = {'prices': p, 'cfg': cn_cfg, 'cutoff': cutoffs['CN'],
+                                           'signals': {'baseline': base, 'rp40': rp40}}
             blend = evaluate_china_rule_blend(p, market_tape, prices['US'], PublicRuleConfig(cn_blend=.25))
             result['models']['CN'] = pack_models('CN', {
                 'baseline': ('五资产轮动 · 在线重算', base, hist),
                 'advisory': ('双重风险否决 · 在线研究', advisory, ahist),
-                'blend25': ('25%公开规则融合 · 在线研究', blend['signal'], blend['ledger'])}, cutoffs['CN'])
+                'blend25': ('25%公开规则融合 · 在线研究', blend['signal'], blend['ledger']),
+                'rp40': ('V18 + 40%风险平价底仓 · 在线重算', rp40, rp40_hist)}, cutoffs['CN'])
             sig = base.iloc[-1]
             try:
                 result['external_backtests']['CN'] = run_bt_reference(p, base, 'CN')
